@@ -1,0 +1,2687 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Outil Unifié de Collecte — Surveillance FS (ANSSP/DSER)</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+<style>
+:root{
+  --navy:#12314f; --navy-2:#1f4e78; --teal:#1b8a7a; --teal-light:#e6f4f1;
+  --paper:#f5f7f6; --card:#ffffff; --ink:#1c2b33; --muted:#5b6b74; --line:#dfe6e6;
+  --amber:#fff2cc; --amber-line:#e8d38a; --green:#e6f2e2; --green-ink:#2f6b2f;
+  --red:#c0392b; --grey:#eef0f0; --radius:8px; font-size:15px;
+}
+*{box-sizing:border-box;}
+body{margin:0; background:var(--paper); color:var(--ink); font-family:"Segoe UI", Arial, Helvetica, sans-serif;}
+
+/* ---------- LOGIN SCREEN ---------- */
+#loginScreen{
+  position:fixed; inset:0; background:linear-gradient(135deg,var(--navy),var(--navy-2)); z-index:200;
+  display:flex; align-items:center; justify-content:center; padding:20px;
+}
+.login-card{background:#fff; border-radius:12px; width:100%; max-width:420px; overflow:hidden; box-shadow:0 20px 60px rgba(0,0,0,.3);}
+.login-card .lhead{background:var(--navy); color:#fff; padding:22px; text-align:center;}
+.login-card .lhead .mark{width:44px;height:44px;border-radius:10px;background:var(--teal);display:flex;align-items:center;justify-content:center;font-weight:800;margin:0 auto 8px;}
+.login-card .lhead h2{margin:0; font-size:16px;}
+.login-card .lhead p{margin:4px 0 0; font-size:11.5px; color:#cfe0ea;}
+.login-tabs{display:flex; border-bottom:1px solid var(--line);}
+.login-tabs button{flex:1; border:none; background:#fafbfb; padding:12px; font-size:13px; font-weight:700; color:var(--muted); cursor:pointer; border-bottom:3px solid transparent;}
+.login-tabs button.active{color:var(--navy-2); border-bottom-color:var(--teal); background:#fff;}
+.login-body{padding:22px;}
+.login-body label{display:block; font-size:12px; font-weight:700; color:var(--navy); margin-bottom:5px; margin-top:12px;}
+.login-body input, .login-body select{width:100%; padding:9px 10px; border:1px solid var(--line); border-radius:6px; font-size:13.5px;}
+.login-body button.btn-login{margin-top:18px; width:100%; padding:11px; background:var(--teal); color:#fff; border:none; border-radius:6px; font-weight:700; cursor:pointer; font-size:13.5px;}
+.login-error{color:var(--red); font-size:12px; margin-top:10px; display:none;}
+.login-pane{display:none;} .login-pane.active{display:block;}
+.sync-settings-toggle{margin-top:16px; text-align:center;}
+.sync-settings-toggle button{background:none; border:none; color:var(--muted); font-size:11.5px; cursor:pointer; text-decoration:underline;}
+.sync-help{font-size:11px; color:var(--muted); line-height:1.5; margin:10px 0;}
+.sync-indicator{font-size:11px; padding:4px 10px; border-radius:20px; white-space:nowrap;}
+.sync-indicator.on{background:rgba(27,138,122,.25); color:#c7f0e6;}
+.sync-indicator.off{background:rgba(217,119,6,.2); color:#ffe4b8;}
+
+header.app{
+  background:linear-gradient(90deg,var(--navy),var(--navy-2)); color:#fff; padding:14px 22px;
+  display:flex; align-items:center; gap:14px; position:sticky; top:0; z-index:50; box-shadow:0 2px 8px rgba(0,0,0,.15);
+}
+header.app .mark{width:36px;height:36px;border-radius:8px;background:var(--teal);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:15px;flex:none;}
+header.app h1{font-size:16px;margin:0;font-weight:700;letter-spacing:.2px;}
+header.app .sub{font-size:11.5px;color:#cfe0ea;margin-top:1px;}
+header.app .spacer{flex:1;}
+header.app .whoami{font-size:12px; color:#e4eef3; background:rgba(255,255,255,.1); padding:6px 12px; border-radius:20px;}
+.save-indicator{font-size:11.5px; padding:4px 10px; border-radius:20px; white-space:nowrap;}
+.save-indicator.dirty{background:rgba(217,119,6,.25); color:#ffe4b8;}
+.save-indicator.clean{background:rgba(255,255,255,.1); color:#cfe0ea;}
+.btn{border:1px solid transparent; border-radius:6px; padding:8px 14px; font-size:13px; cursor:pointer; font-weight:600; transition:filter .15s ease; white-space:nowrap;}
+.btn-primary{background:var(--teal); color:#fff;} .btn-primary:hover{filter:brightness(1.08);}
+.btn-ghost{background:rgba(255,255,255,.08); color:#fff; border-color:rgba(255,255,255,.35);} .btn-ghost:hover{background:rgba(255,255,255,.16);}
+.btn-outline{background:#fff;color:var(--navy-2);border-color:var(--line);} .btn-outline:hover{background:var(--teal-light);}
+.btn-danger{background:#fff;color:var(--red);border-color:#ecc;} .btn-danger:hover{background:#fdecea;}
+.btn-send{background:#d97706;color:#fff;} .btn-send:hover{filter:brightness(1.06);}
+.btn:disabled{opacity:.5; cursor:not-allowed;}
+
+nav.tabs{display:flex; gap:4px; background:#fff; border-bottom:2px solid var(--line); padding:0 18px; position:sticky; top:63px; z-index:40; overflow-x:auto;}
+nav.tabs button{border:none; background:transparent; padding:12px 14px; font-size:13px; font-weight:600; color:var(--muted); cursor:pointer; border-bottom:3px solid transparent; white-space:nowrap; display:flex; align-items:center; gap:5px;}
+nav.tabs button.active{color:var(--navy-2); border-bottom-color:var(--teal);}
+nav.tabs button:hover{color:var(--navy-2);}
+nav.tabs button.locked-tab{color:#c7ccce; cursor:not-allowed;}
+nav.tabs button.locked-tab:hover{color:#c7ccce;}
+nav.tabs button.hidden-tab{display:none;}
+
+main{max-width:1260px; margin:0 auto; padding:22px 18px 60px;}
+.panel{display:none;} .panel.active{display:block;}
+
+.card{background:var(--card); border:1px solid var(--line); border-radius:var(--radius); margin-bottom:18px; overflow:hidden;}
+.card h2{margin:0; padding:12px 16px; background:var(--teal-light); color:var(--navy); font-size:14.5px; border-bottom:1px solid var(--line); font-weight:700;}
+.card .body{padding:16px;}
+.hint{font-size:12.5px; color:var(--muted); line-height:1.5; margin:0 0 12px;}
+.hint.warn{background:#fdf1cf; color:#8a6d1b; padding:8px 10px; border-radius:6px; border:1px solid #ecd08a;}
+.hint.danger{background:#fbe1de; color:#a33327; padding:8px 10px; border-radius:6px; border:1px solid #ecb;}
+
+table{width:100%; border-collapse:collapse; font-size:12.8px;}
+th,td{border:1px solid var(--line); padding:6px 7px; text-align:left; vertical-align:middle;}
+th{background:#eef3f2; color:var(--navy); font-weight:700; font-size:11.5px;}
+td.center, th.center{text-align:center;}
+tr.domain-row td{background:var(--teal-light); font-weight:700; color:var(--navy);}
+tr.total-row td{background:var(--green); font-weight:700;}
+tr.na-row td{background:var(--grey); color:#9aa4a8; font-style:italic;}
+tr.na-row input, tr.na-row select{background:var(--grey); color:#9aa4a8;}
+tr.admin-ctrl-row td{background:#f2f4f4;}
+input[type=number], input[type=text], input[type=password], input[type=date], select, textarea{
+  width:100%; padding:6px 7px; border:1px solid var(--line); border-radius:5px; font-size:12.8px; font-family:inherit; background:#fff;
+}
+td.input-cell{background:var(--amber); border-color:var(--amber-line);}
+td.calc-cell{background:var(--green); color:var(--green-ink); font-weight:700; text-align:center;}
+td.explain-cell{font-size:11.5px; color:var(--muted); max-width:260px;}
+.small-col{width:80px;} .xsmall-col{width:56px;} .med-col{width:120px;}
+td.rag-red{background:#fbe1de; color:#a33327; font-weight:700; text-align:center;}
+td.rag-yellow{background:#fdf1cf; color:#8a6d1b; font-weight:700; text-align:center;}
+td.rag-green{background:#dcf0e2; color:#227a44; font-weight:700; text-align:center;}
+
+.perf-banner{display:flex; gap:18px; flex-wrap:wrap; align-items:stretch; margin-bottom:18px;}
+.perf-box{flex:1; min-width:160px; background:#fff; border:1px solid var(--line); border-radius:var(--radius); padding:14px 16px; text-align:center;}
+.perf-box .val{font-size:26px; font-weight:800; color:var(--navy-2);}
+.perf-box .lbl{font-size:11.5px; color:var(--muted); text-transform:uppercase; letter-spacing:.4px; margin-top:2px;}
+.perf-box.big{background:linear-gradient(135deg,var(--navy),var(--navy-2)); color:#fff;}
+.perf-box.big .val{color:#fff; font-size:32px;} .perf-box.big .lbl{color:#cfe0ea;}
+.perf-box.na{opacity:.55;}
+.badge{display:inline-block; padding:2px 9px; border-radius:20px; font-size:11px; font-weight:700; margin-top:6px;}
+.badge.faible{background:#fbe1de;color:#a33327;} .badge.moyenne{background:#fdf1cf;color:#8a6d1b;} .badge.bonne{background:#dcf0e2;color:#227a44;}
+.badge.locked{background:#eef0f0;color:#5b6b74;}
+.badge.sent{background:#dcf0e2;color:#227a44;}
+.badge.notsent{background:#fdf1cf;color:#8a6d1b;}
+.badge.role{background:rgba(255,255,255,.15); color:#fff;}
+
+.fs-toolbar{display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:16px;}
+.fs-toolbar select{max-width:340px;}
+.fs-toolbar .fs-meta{font-size:12px; color:var(--muted);}
+.type-pill{font-size:11px; font-weight:700; padding:2px 8px; border-radius:20px; background:var(--teal-light); color:var(--navy);}
+
+table.admin-table th, table.admin-table td{font-size:12px;}
+.row-actions{display:flex; gap:6px;}
+.icon-btn{border:1px solid var(--line); background:#fff; border-radius:5px; padding:4px 8px; cursor:pointer; font-size:12px;}
+.icon-btn:hover{background:#fdecea; border-color:#ecc; color:var(--red);}
+
+.lock-screen{padding:60px 20px; text-align:center;}
+.lock-screen .icon{font-size:36px; margin-bottom:10px;}
+.lock-screen p{color:var(--muted); font-size:13.5px; max-width:420px; margin:6px auto 18px;}
+
+.chart-grid{display:grid; grid-template-columns:1fr 1fr; gap:18px;}
+.chart-wrap{background:#fff; border:1px solid var(--line); border-radius:var(--radius); padding:14px;}
+.chart-wrap h3{margin:0 0 10px; font-size:13px; color:var(--navy);}
+.chart-wrap canvas{max-height:320px;}
+@media (max-width:900px){.chart-grid{grid-template-columns:1fr;} .synth-grid{grid-template-columns:1fr !important;}}
+
+.domain-block{border:1px solid var(--line); border-radius:var(--radius); margin-bottom:16px; overflow:hidden;}
+.domain-block .dh{background:var(--navy); color:#fff; padding:10px 14px; font-weight:700; font-size:13px;}
+.synth-grid{display:grid; grid-template-columns:1fr 1fr 1fr; gap:0;}
+.synth-col{padding:10px 12px; border-right:1px solid var(--line);}
+.synth-col:last-child{border-right:none;}
+.synth-col h4{margin:0 0 8px; font-size:12px; color:var(--navy);}
+.synth-col input{margin-bottom:6px;}
+
+.evaluateur-grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:14px;}
+.eval-card{border:1px solid var(--line); border-radius:var(--radius); padding:12px;}
+.eval-card h4{margin:0 0 8px; font-size:12.5px; color:var(--navy);}
+.eval-card input{margin-bottom:6px;}
+
+.photo-grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:14px;}
+.photo-card{border:1px solid var(--line); border-radius:var(--radius); padding:12px; text-align:center;}
+.photo-card img{max-width:100%; max-height:160px; border-radius:6px; margin-top:8px; display:none;}
+.photo-card input[type=text]{margin-bottom:8px;}
+
+.user-row select[multiple]{height:90px;}
+.chip{display:inline-block; background:var(--teal-light); color:var(--navy); font-size:11px; padding:2px 7px; border-radius:12px; margin:2px;}
+.checkbox-list{max-height:120px; overflow-y:auto; border:1px solid var(--line); border-radius:6px; padding:6px 8px; background:#fff;}
+.checkbox-list label{display:block; font-size:11.5px; font-weight:400; padding:2px 0; cursor:pointer;}
+.checkbox-list input[type=checkbox]{width:auto; margin-right:6px; vertical-align:middle;}
+
+footer{text-align:center; font-size:11.5px; color:var(--muted); padding:20px;}
+.empty-state{padding:40px 20px; text-align:center; color:var(--muted); font-size:13.5px;}
+.section-note{font-size:11.5px; color:var(--muted); font-style:italic; padding:10px 16px; border-top:1px solid var(--line);}
+.status-line{display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin:10px 0;}
+
+@media print{ header.app, nav.tabs, .fs-toolbar, .btn{display:none !important;} .panel{display:block !important;} }
+</style>
+</head>
+<body>
+
+<!-- ============================ LOGIN SCREEN ============================ -->
+<div id="loginScreen">
+  <div class="login-card">
+    <div class="lhead">
+      <div class="mark">TD</div>
+      <h2>Outil unifié de collecte — Surveillance FS</h2>
+      <p>ANSSP / DSER — connectez-vous pour continuer</p>
+    </div>
+    <div class="login-tabs">
+      <button data-login-tab="user" class="active">Équipe / Utilisateur</button>
+      <button data-login-tab="zsmanager">Gestionnaire ZS</button>
+      <button data-login-tab="admin">Administrateur</button>
+    </div>
+    <div class="login-body">
+      <div class="login-pane active" id="loginPaneUser">
+        <label>Identifiant d'équipe</label>
+        <input type="text" id="userLoginUsername" placeholder="ex : equipe-atlantique">
+        <label>Mot de passe</label>
+        <input type="password" id="userLoginPassword">
+        <button class="btn-login" id="btnUserLogin">Se connecter</button>
+      </div>
+      <div class="login-pane" id="loginPaneZsmanager">
+        <label>Identifiant du gestionnaire de Zone Sanitaire</label>
+        <input type="text" id="zsLoginUsername" placeholder="ex : gestionnaire-atacora">
+        <label>Mot de passe</label>
+        <input type="password" id="zsLoginPassword">
+        <button class="btn-login" id="btnZsLogin">Se connecter</button>
+      </div>
+      <div class="login-pane" id="loginPaneAdmin">
+        <label>Mot de passe administrateur</label>
+        <input type="password" id="adminLoginPassword">
+        <button class="btn-login" id="btnAdminLogin">Se connecter</button>
+      </div>
+      <div class="login-error" id="loginError"></div>
+      <div class="sync-settings-toggle">
+        <button type="button" id="btnToggleSyncSettings">⚙ Paramètres de synchronisation (serveur partagé)</button>
+      </div>
+      <div class="login-pane" id="syncSettingsPane">
+        <p class="sync-help">Pour que les données soient visibles en temps réel par toute l'équipe, chaque appareil doit
+        renseigner ici la même URL d'application web (Google Apps Script) et la même clé secrète, fournies par
+        l'administrateur. Laissez vide pour rester en mode local (hors ligne, non partagé).</p>
+        <label>URL de l'application web (Apps Script)</label>
+        <input type="text" id="syncUrlInput" placeholder="https://script.google.com/macros/s/AKfycb.../exec">
+        <label>Clé secrète</label>
+        <input type="text" id="syncSecretInput" placeholder="clé partagée définie dans Code.gs">
+        <label>Clé admin (à remplir UNIQUEMENT sur le ou les appareils de l'administrateur — laisser vide sur les appareils des équipes et gestionnaires de zone)</label>
+        <input type="text" id="syncAdminKeyInput" placeholder="clé ADMIN_SECRET définie dans Code.gs">
+        <button class="btn-login" id="btnSaveSyncSettings" style="background:var(--navy-2);">Enregistrer les paramètres serveur</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<header class="app">
+  <div class="mark">TD</div>
+  <div>
+    <h1>Outil unifié de collecte — Surveillance des Formations Sanitaires</h1>
+    <div class="sub">Outil 1 · TDES-3 — Outil 2 · TDES-1 — Outil 3 · TDES-2 — Priorisation — Plan d'action — Photos/Évaluateurs — ANSSP / DSER</div>
+  </div>
+  <div class="spacer"></div>
+  <span class="whoami" id="whoamiBadge"></span>
+  <span class="sync-indicator" id="syncIndicator"></span>
+  <span class="save-indicator" id="saveIndicator"></span>
+  <button class="btn btn-primary" id="btnSaveNow">💾 Enregistrer</button>
+  <button class="btn btn-ghost" id="btnExportJson">Sauvegarder tout (.json)</button>
+  <button class="btn btn-ghost" id="btnImportJson">Importer (.json)</button>
+  <input type="file" id="fileImport" accept=".json" style="display:none">
+  <button class="btn btn-primary" id="btnExportExcel">Exporter en Excel</button>
+  <button class="btn btn-ghost" id="btnLogout">Déconnexion</button>
+</header>
+
+<nav class="tabs">
+  <button data-tab="admin" class="active">Administration</button>
+  <button data-tab="outil1">Outil 1 · TDES-3</button>
+  <button data-tab="outil3">Outil 3 · TDES-2</button>
+  <button data-tab="outil2">Outil 2 · TDES-1</button>
+  <button data-tab="graphiques">Graphiques</button>
+  <button data-tab="priorisation">Priorisation</button>
+  <button data-tab="plan">Plan d'action</button>
+  <button data-tab="photos">Photos &amp; Évaluateurs</button>
+</nav>
+
+<main>
+
+  <!-- ============================ ADMIN PANEL ============================ -->
+  <section class="panel active" id="panel-admin">
+    <div id="adminNoAccess" class="card" style="display:none;">
+      <div class="lock-screen"><div class="icon">🔒</div><p>Cette page est réservée au compte Administrateur.</p></div>
+    </div>
+
+    <div id="adminUnlocked" style="display:none;">
+      <div class="card">
+        <h2>Nommer les centres (FS) dans l'ordre d'évaluation</h2>
+        <div class="body">
+          <p class="hint">Ajoutez chaque Formation Sanitaire dans l'ordre voulu, avec son type de structure, son
+          Département, sa Zone sanitaire et sa Commune. Le type de structure détermine automatiquement quels
+          indicateurs sont applicables.</p>
+          <div style="overflow-x:auto;">
+          <table class="admin-table" id="adminTable">
+            <thead>
+              <tr>
+                <th class="center xsmall-col">Ordre</th>
+                <th>Nom de la FS</th>
+                <th class="med-col">Type de structure</th>
+                <th>Département</th>
+                <th>Zone sanitaire</th>
+                <th>Commune</th>
+                <th class="small-col">Date d'évaluation</th>
+                <th class="xsmall-col center">Action</th>
+              </tr>
+            </thead>
+            <tbody id="adminBody"></tbody>
+          </table>
+          </div>
+          <div style="margin-top:12px; display:flex; gap:10px; flex-wrap:wrap;">
+            <button class="btn btn-outline" id="btnAddCenter">+ Ajouter une FS</button>
+            <label class="btn btn-outline" style="display:inline-block; margin:0;">
+              📥 Importer une liste de centres (.xlsx / .csv)
+              <input type="file" id="fileImportCenters" accept=".xlsx,.xls,.csv" style="display:none">
+            </label>
+            <button class="btn btn-outline" id="btnChangePass">Changer le mot de passe administrateur</button>
+          </div>
+          <p class="hint" style="margin-top:10px;">Format attendu pour l'import : une feuille avec les colonnes
+          <code>Nom</code>, <code>Type</code> (Publique/Privée/Hôpital), <code>Département</code>, <code>Zone sanitaire</code>,
+          <code>Commune</code>. Les colonnes manquantes seront laissées vides. Les gestionnaires de Zone Sanitaire important
+          une liste voient automatiquement leur zone appliquée à toutes les lignes importées.</p>
+        </div>
+      </div>
+
+      <div class="card" id="cardZsManagers">
+        <h2>Gestionnaires de Zone Sanitaire</h2>
+        <div class="body">
+          <p class="hint">Un gestionnaire de Zone Sanitaire peut définir les centres et les équipes de sa zone, importer
+          des listes de centres, et consulter les données de sa zone uniquement.</p>
+          <div style="overflow-x:auto;">
+          <table id="zsManagersTable">
+            <thead><tr><th class="med-col">Zone sanitaire</th><th class="med-col">Identifiant</th><th class="med-col">Mot de passe</th><th class="xsmall-col center">Action</th></tr></thead>
+            <tbody id="zsManagersBody"></tbody>
+          </table>
+          </div>
+          <div style="margin-top:12px;">
+            <button class="btn btn-outline" id="btnAddZsManager">+ Ajouter un gestionnaire de Zone Sanitaire</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Comptes utilisateurs (équipes) et affectation des centres</h2>
+        <div class="body">
+          <p class="hint">Créez un compte par équipe d'évaluateurs et cochez les FS qui lui sont affectées. Chaque équipe
+          ne verra, dans le sélecteur de FS, que les centres cochés ici. Vous gardez la main sur leurs identifiants.</p>
+          <div style="overflow-x:auto;">
+          <table id="usersTable">
+            <thead><tr><th class="med-col">Nom de l'équipe</th><th class="med-col">Identifiant</th><th class="med-col">Mot de passe</th><th>Centres affectés (cases à cocher)</th><th class="xsmall-col center">Action</th></tr></thead>
+            <tbody id="usersBody"></tbody>
+          </table>
+          </div>
+          <div style="margin-top:12px;">
+            <button class="btn btn-outline" id="btnAddUser">+ Ajouter une équipe</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Données centralisées par l'administrateur (Id 12, Id 19, Id 20)</h2>
+        <div class="body">
+          <p class="hint">Ces trois indicateurs sont souvent renseignés à partir de sources centrales (niveau
+          département/zone) plutôt que collectées sur le terrain. Les valeurs saisies ici sont automatiquement prises
+          en compte dans le calcul des scores de chaque FS, et s'affichent en grisé (non modifiables) dans l'Outil 1
+          des équipes.</p>
+          <div style="overflow-x:auto;">
+          <table id="overridesTable">
+            <thead>
+              <tr>
+                <th>FS</th>
+                <th class="small-col center">Id 12 — Numérateur</th>
+                <th class="small-col center">Id 12 — Dénominateur</th>
+                <th class="small-col center">Id 19 — Numérateur</th>
+                <th class="small-col center">Id 19 — Dénominateur</th>
+                <th class="small-col center">Id 20 — Numérateur</th>
+                <th class="small-col center">Id 20 — Dénominateur</th>
+              </tr>
+            </thead>
+            <tbody id="overridesBody"></tbody>
+          </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Outil 3 — Données centralisées par l'administrateur</h2>
+        <div class="body">
+          <p class="hint">Le <strong>Rapport hebdomadaire FS transmis au CSE</strong>, la <strong>Base SIMR au CSE</strong>
+          et le <strong>DHIS2 au CSE</strong> sont renseignés ici (niveau central) et s'affichent en grisé, pris en compte
+          automatiquement dans le calcul des discordances, dans l'Outil 3 des équipes.</p>
+          <div style="overflow-x:auto;">
+          <table id="adminSrcTable">
+            <thead>
+              <tr>
+                <th>FS</th>
+                <th colspan="4" class="center">Rapport hebdo transmis au CSE</th>
+                <th colspan="4" class="center">Base SIMR au CSE</th>
+                <th colspan="4" class="center">DHIS2 au CSE</th>
+              </tr>
+              <tr>
+                <th></th>
+                <th class="xsmall-col center">SIMR</th><th class="xsmall-col center">Déc. mat.</th><th class="xsmall-col center">Déc. néo.</th><th class="xsmall-col center">Déc. ≥5a</th>
+                <th class="xsmall-col center">SIMR</th><th class="xsmall-col center">Déc. mat.</th><th class="xsmall-col center">Déc. néo.</th><th class="xsmall-col center">Déc. ≥5a</th>
+                <th class="xsmall-col center">SIMR</th><th class="xsmall-col center">Déc. mat.</th><th class="xsmall-col center">Déc. néo.</th><th class="xsmall-col center">Déc. ≥5a</th>
+              </tr>
+            </thead>
+            <tbody id="adminSrcBody"></tbody>
+          </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Suivi de la collecte — toutes les FS</h2>
+        <div class="body">
+          <p class="hint">Pour récupérer les données saisies par d'autres équipes sur d'autres appareils, demandez-leur
+          d'utiliser le bouton <strong>« ENVOYER LES DONNÉES »</strong> (page Photos &amp; Évaluateurs) qui génère un
+          fichier <code>.json</code> à vous transmettre, puis importez-le ci-dessous en une seule fois (import multiple).</p>
+          <div style="margin-bottom:12px;">
+            <label class="btn btn-outline" style="display:inline-block;">
+              📥 Importer des soumissions reçues (plusieurs fichiers)
+              <input type="file" id="fileImportSubmissions" accept=".json" multiple style="display:none">
+            </label>
+          </div>
+          <div style="overflow-x:auto;">
+          <table id="trackingTable">
+            <thead><tr><th>Ordre</th><th>FS</th><th>Type</th><th>Commune</th><th>Zone sanitaire</th><th class="center">Performance globale</th><th class="center">Priorisation</th><th class="center">Données envoyées</th></tr></thead>
+            <tbody id="trackingBody"></tbody>
+          </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Vue d'ensemble par Commune</h2>
+        <div class="body" style="overflow-x:auto;">
+          <table id="communeTable">
+            <thead><tr><th>Commune</th><th class="center">Nb FS</th><th class="center">Performance moyenne</th><th class="center">Données envoyées</th></tr></thead>
+            <tbody id="communeBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Vue d'ensemble par Zone sanitaire</h2>
+        <div class="body" style="overflow-x:auto;">
+          <table id="zsTable">
+            <thead><tr><th>Zone sanitaire</th><th class="center">Nb FS</th><th class="center">Performance moyenne</th><th class="center">Données envoyées</th></tr></thead>
+            <tbody id="zsBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================ SHARED FS TOOLBAR ============================ -->
+  <div id="fsToolbarWrap" style="display:none;">
+    <div class="fs-toolbar">
+      <label style="font-weight:700;font-size:13px;color:var(--navy);">FS en cours :</label>
+      <select id="fsSelect"></select>
+      <span class="fs-meta" id="fsMeta"></span>
+      <span id="lockBadgeWrap"></span>
+    </div>
+    <div id="noAssignedCenters" class="empty-state" style="display:none;">Aucun centre ne vous a été affecté pour le moment. Contactez l'administrateur.</div>
+    <div class="perf-banner" id="perfBanner"></div>
+  </div>
+
+  <!-- ============================ OUTIL 1 ============================ -->
+  <section class="panel" id="panel-outil1">
+    <div id="outil1NoFs" class="empty-state">Sélectionnez une FS ci-dessus pour commencer la saisie.</div>
+    <div id="outil1Locked" class="card" style="display:none;"><div class="lock-screen"><div class="icon">🔒</div><p>Cette FS a été validée pour la synthèse (page Priorisation ouverte) : les outils de collecte sont verrouillés.</p><button class="btn btn-outline" id="btnUnlockFs1">Déverrouiller (admin)</button></div></div>
+    <div id="outil1Content" style="display:none;">
+      <div class="card">
+        <h2>Outil TDES-3 — Évaluation de la performance et pondération des indicateurs</h2>
+        <div class="body">
+          <p class="hint">Saisissez le <strong>Numérateur</strong> et le <strong>Dénominateur</strong> (ou choisissez <strong>Oui/Non</strong>
+          selon l'indicateur). La <strong>Valeur atteinte</strong> et le <strong>Score obtenu</strong> sont calculés
+          automatiquement — ces deux colonnes ne sont pas modifiables directement.</p>
+          <p class="hint warn" id="naWarning" style="display:none;"></p>
+          <p class="hint warn">🔒 Les indicateurs Id 12, Id 19 et Id 20 sont renseignés de façon centralisée par
+          l'administrateur (valeurs affichées en grisé). Ils sont automatiquement pris en compte dans les calculs
+          mais ne sont pas modifiables ici.</p>
+          <div style="overflow-x:auto;">
+          <table id="outil1Table">
+            <thead>
+              <tr>
+                <th class="xsmall-col center">N°</th>
+                <th style="min-width:220px;">Intitulé de l'indicateur</th>
+                <th class="small-col center">Numérateur</th>
+                <th class="small-col center">Dénominateur</th>
+                <th class="small-col center">Cible/Objectif</th>
+                <th class="small-col center">Valeur atteinte</th>
+                <th class="xsmall-col center">Score plafond</th>
+                <th class="xsmall-col center">Score obtenu</th>
+                <th style="min-width:200px;">Explication sur la collecte et le calcul</th>
+              </tr>
+            </thead>
+            <tbody id="outil1Body"></tbody>
+          </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================ OUTIL 3 ============================ -->
+  <section class="panel" id="panel-outil3">
+    <div id="outil3NoFs" class="empty-state">Sélectionnez une FS ci-dessus pour commencer la saisie.</div>
+    <div id="outil3Locked" class="card" style="display:none;"><div class="lock-screen"><div class="icon">🔒</div><p>Cette FS a été validée pour la synthèse (page Priorisation ouverte) : les outils de collecte sont verrouillés.</p><button class="btn btn-outline" id="btnUnlockFs2">Déverrouiller (admin)</button></div></div>
+    <div id="outil3Content" style="display:none;">
+      <div class="card">
+        <h2>Outil TDES-2 — Exactitude des données : collecte par source</h2>
+        <div class="body">
+          <p class="hint">Saisissez, pour chaque source de données, le nombre de cas dénombrés par catégorie. Le total FS
+          et les taux de discordance sont calculés automatiquement.</p>
+          <div style="overflow-x:auto;">
+          <table id="outil3SourceTable">
+            <thead>
+              <tr>
+                <th>Sources de données</th>
+                <th class="small-col center">Nombre de cas SIMR</th>
+                <th class="small-col center">Nombre décès maternels</th>
+                <th class="small-col center">Nombre décès néonatals</th>
+                <th class="small-col center">Décès ≥ 5 ans</th>
+                <th class="small-col center">Total FS</th>
+              </tr>
+            </thead>
+            <tbody id="outil3SourceBody"></tbody>
+          </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Exactitude des données — discordances calculées automatiquement</h2>
+        <div class="body" style="overflow-x:auto;">
+          <table id="outil3DiscordTable">
+            <thead>
+              <tr>
+                <th>Indicateur d'exactitude</th>
+                <th class="small-col center">Nombre de cas SIMR</th>
+                <th class="small-col center">Nombre décès maternels</th>
+                <th class="small-col center">Nombre décès néonatals</th>
+                <th class="small-col center">Décès ≥ 5 ans</th>
+                <th class="small-col center">Total FS</th>
+              </tr>
+            </thead>
+            <tbody id="outil3DiscordBody"></tbody>
+          </table>
+        </div>
+        <div class="section-note">NB : pour les cas SIMR, prendre en compte Choléra, Méningite, Fièvre jaune, Tétanos néonatal, PFA, Rougeole,
+        Shigellose, Rage, Charbon Bactéridien, Intoxication alimentaire, Fièvre Lassa, Fièvre Ebola, Dengue, Fièvre Marburg, Chikungunya, Zika, Mpox.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================ OUTIL 2 ============================ -->
+  <section class="panel" id="panel-outil2">
+    <div id="outil2NoFs" class="empty-state">Sélectionnez une FS ci-dessus pour commencer la saisie.</div>
+    <div id="outil2Content" style="display:none;">
+      <div class="card">
+        <h2>Outil TDES-1 — Agrégation de la performance par domaine (auto-alimenté depuis l'Outil 1)</h2>
+        <div class="body">
+          <p class="hint">Ce tableau est calculé automatiquement à partir des données saisies dans l'Outil 1 — inutile
+          d'avoir terminé toute la saisie pour consulter cette page : elle se met à jour en continu, même partiellement remplie.</p>
+          <div style="overflow-x:auto;">
+          <table>
+            <thead><tr><th>Domaines</th><th class="small-col center">N (score obtenu)</th><th class="small-col center">D (score plafond)</th><th class="small-col center">% performance</th></tr></thead>
+            <tbody id="outil2DomainBody"></tbody>
+          </table>
+          </div>
+        </div>
+        <div class="section-note">Performance globale FS = somme des scores obtenus / total des scores plafonds applicables</div>
+      </div>
+
+      <div class="card">
+        <h2>Détail des scores par indicateur (Id 1 à Id 32)</h2>
+        <div class="body" style="overflow-x:auto;">
+          <table id="outil2GridTable"></table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================ GRAPHIQUES ============================ -->
+  <section class="panel" id="panel-graphiques">
+    <div id="graphNoFs" class="empty-state">Sélectionnez une FS ci-dessus pour voir les graphiques.</div>
+    <div id="graphContent" style="display:none;">
+      <div class="chart-grid">
+        <div class="chart-wrap"><h3>Performance par domaine — FS en cours</h3><canvas id="chartDomains"></canvas></div>
+        <div class="chart-wrap"><h3>Exactitude des données — discordances (%) — FS en cours</h3><canvas id="chartExactitude"></canvas></div>
+      </div>
+      <div class="chart-wrap" style="margin-top:18px;">
+        <h3>Comparaison de la performance globale — FS visibles</h3>
+        <canvas id="chartCompare"></canvas>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================ PRIORISATION ============================ -->
+  <section class="panel" id="panel-priorisation">
+    <div id="prioNoFs" class="empty-state">Sélectionnez une FS ci-dessus pour accéder à cette page.</div>
+    <div id="prioContent" style="display:none;">
+      <div class="hint danger" id="prioLockWarning" style="display:none;">
+        ⚠️ En ouvrant cette page, la saisie des Outils 1, 2, 3 et des Graphiques pour cette FS a été <strong>verrouillée</strong>.
+      </div>
+      <div class="card">
+        <h2>Tableau de priorisation des indicateurs</h2>
+        <div class="body">
+          <p class="hint">Code couleur : <span class="rag-red" style="padding:2px 8px;border-radius:4px;">Rouge</span> si &lt; 50%,
+          <span class="rag-yellow" style="padding:2px 8px;border-radius:4px;">Jaune</span> si entre 50% et 85%,
+          <span class="rag-green" style="padding:2px 8px;border-radius:4px;">Vert</span> si ≥ 85%.</p>
+          <div style="overflow-x:auto;">
+          <table id="prioTable">
+            <thead><tr><th class="xsmall-col center">N°</th><th>Intitulé de l'indicateur</th><th class="small-col center">Score obtenu / plafond</th><th class="small-col center">% atteint</th><th class="small-col center">Statut</th></tr></thead>
+            <tbody id="prioBody"></tbody>
+          </table>
+          </div>
+        </div>
+      </div>
+
+      <div id="synthesisWrap"></div>
+    </div>
+  </section>
+
+  <!-- ============================ PLAN D'ACTION ============================ -->
+  <section class="panel" id="panel-plan">
+    <div id="planNoFs" class="empty-state">Sélectionnez une FS ci-dessus pour accéder à cette page.</div>
+    <div id="planContent" style="display:none;">
+      <div class="card">
+        <h2>Plan de résolution des problèmes</h2>
+        <div class="body">
+          <p class="hint">Renseignez au moins 5 points faibles à corriger, à partir des points à améliorer identifiés dans la page Priorisation.</p>
+          <div style="overflow-x:auto;">
+          <table id="planTable">
+            <thead>
+              <tr>
+                <th class="med-col">Domaine</th>
+                <th class="med-col">Indicateur</th>
+                <th>Points à améliorer</th>
+                <th>Cause / goulot d'étranglement</th>
+                <th>Activité proposée</th>
+                <th class="small-col">Coût estimatif</th>
+                <th class="xsmall-col center">Action</th>
+              </tr>
+            </thead>
+            <tbody id="planBody"></tbody>
+          </table>
+          </div>
+          <div style="margin-top:12px;">
+            <button class="btn btn-outline" id="btnAddPlanRow">+ Ajouter une ligne</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================ PHOTOS & ÉVALUATEURS ============================ -->
+  <section class="panel" id="panel-photos">
+    <div id="photosNoFs" class="empty-state">Sélectionnez une FS ci-dessus pour accéder à cette page.</div>
+    <div id="photosContent" style="display:none;">
+      <div class="card">
+        <h2>Photos de la séance</h2>
+        <div class="body">
+          <p class="hint">Ces champs sont facultatifs. Les photos sont automatiquement compressées avant enregistrement.</p>
+          <div class="photo-grid" id="photoGrid"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Évaluateurs, rapporteur et superviseurs</h2>
+        <div class="body">
+          <p class="hint">Aucun champ n'est obligatoire.</p>
+          <div class="evaluateur-grid" id="evaluateurGrid"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Soumission des données</h2>
+        <div class="body">
+          <p class="hint">Une fois la collecte terminée pour cette FS, cliquez sur « ENVOYER LES DONNÉES » pour générer
+          un fichier à transmettre à l'administrateur (email, WhatsApp, clé USB…). L'envoi déverrouille aussi les pages
+          de collecte pour que vous puissiez encore les consulter ou les corriger.</p>
+          <div class="status-line">
+            <span id="sendStatusBadge"></span>
+            <button class="btn btn-send" id="btnSendData">📤 ENVOYER LES DONNÉES</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer>Outil de collecte hors-ligne — les données sont conservées localement dans votre navigateur. Pensez à exporter régulièrement une sauvegarde (.json) et à envoyer vos soumissions à l'administrateur.</footer>
+
+<script>
+/* =========================================================================
+   RÉFÉRENTIEL DES 32 INDICATEURS
+   ========================================================================= */
+const DOMAINS = [
+  {key:"D1", label:"Mise en oeuvre de la surveillance communautaire"},
+  {key:"D2", label:"Renforcer la surveillance de routine"},
+  {key:"D3", label:"Accroitre la participation des hôpitaux et des privés dans la surveillance"},
+  {key:"D4", label:"Renforcer la gestion des données de surveillance"},
+  {key:"D5", label:"Renforcer le dispositif de préparation et de riposte"},
+];
+
+const NA_INDICATORS_BY_TYPE = {
+  "Privée":  [1,2,3,4,5,6,7,8,9,29],
+  "Hôpital": [1,2,3,4,5,6,7,8,9,29],
+};
+
+// indicateurs dont les valeurs sont centralisées par l'administrateur (par FS) :
+// affichés en grisé et pris en compte dans les calculs, mais non modifiables dans les formulaires des équipes
+const ADMIN_CONTROLLED_IDS = [12, 19, 20];
+
+// sources de l'Outil 3 centralisées par l'administrateur/gestionnaire ZS (par FS) :
+// index 2 = Rapport hebdomadaire FS transmis au CSE, 3 = Base SIMR au CSE, 4 = DHIS2 au CSE
+const ADMIN_CONTROLLED_SRC_IDX = [2, 3, 4];
+
+const INDICATORS = [
+ {id:1,domain:"D1",plafond:5,cible:"80%",rule:"pct3",t:[0.50,0.80],s:[0,3,5],
+   label:"Proportion de village avec identification de relais pour la surveillance communautaire",
+   nLabel:"Nb villages avec relais identifiés", dLabel:"Nb total de villages",
+   explain:"N : nombre de villages avec identification de relais pour la surveillance communautaire ; D : nombre de villages."},
+ {id:2,domain:"D1",plafond:5,cible:"80%",rule:"pct3",t:[0.50,0.80],s:[0,3,5],
+   label:"Proportion de relais formés sur la surveillance communautaire",
+   nLabel:"Nb relais formés", dLabel:"Nb relais identifiés",
+   explain:"N : nombre de relais formés sur la surveillance communautaire ; D : nombre de relais identifiés."},
+ {id:3,domain:"D1",plafond:5,cible:"80%",rule:"pct3",t:[0.50,0.80],s:[0,3,5],
+   label:"Proportion de ASCQ formés sur la surveillance communautaire",
+   nLabel:"Nb ASCQ formés/briefés (12 derniers mois)", dLabel:"Nb total ASCQ devant être formés",
+   explain:"N : nombre total d'ASCQ formés ou briefés dans la détection/notification des MPE au cours des 12 derniers mois ; D : nombre total d'ASCQ devant être formés."},
+ {id:4,domain:"D1",plafond:10,cible:"80%",rule:"pct3",t:[0.50,0.80],s:[0,5,10],
+   label:"Proportion de village mettant en œuvre de la surveillance communautaire",
+   nLabel:"Nb villages avec surveillance mise en œuvre", dLabel:"Nb total de villages",
+   explain:"N : nombre de villages mettant en œuvre la surveillance communautaire (au moins une alerte rapportée dans les 6 derniers mois) ; D : nombre de villages."},
+ {id:5,domain:"D1",plafond:3,cible:"80%",rule:"pct3",t:[0.50,0.80],s:[0,1,3],
+   label:"Complétude de rapports hebdomadaire sur la surveillance communautaire",
+   nLabel:"Nb rapports hebdo communautaires élaborés", dLabel:"Nb rapports attendus sur la période",
+   explain:"N : nombre de rapports hebdomadaires élaborés par les RC + ASCQ ; D : nombre de rapports attendus = (nb semaines × nb RC) + (nb semaines × nb ASCQ)."},
+ {id:6,domain:"D1",plafond:10,cible:"20 alertes/mois",rule:"num3",t:[5,20],s:[0,5,10],
+   label:"Nombre moyen d'alertes détectées par l'ensemble Relais communautaires (RC) par mois",
+   nLabel:"Nb d'alertes détectées par les RC", dLabel:"Nb de mois de la période évaluée",
+   explain:"N : nombre d'alertes détectées par l'ensemble des RC ; D : nombre de mois de la période évaluée. Valeur atteinte = moyenne mensuelle."},
+ {id:7,domain:"D1",plafond:10,cible:"80%",rule:"pct3",t:[0.50,0.80],s:[0,5,10],
+   label:"Proportion d'alertes/rumeurs vérifiées ou investiguées dans les 24h à 48h",
+   nLabel:"Nb alertes/rumeurs vérifiées 24-48h", dLabel:"Nb total d'alertes détectées par les RC",
+   explain:"N : nombre d'alertes/rumeurs vérifiées ou investiguées dans les 24h à 48h ; D : nombre total d'alertes détectées par les RC."},
+ {id:8,domain:"D1",plafond:3,cible:"10%",rule:"pct2gap",t:[0.05,0.09],s:[0,1,3],
+   label:"Proportion d'alertes qui sont des événements avérés",
+   nLabel:"Nb total d'événements avérés", dLabel:"Nb d'alertes détectées par les RC",
+   explain:"N : nombre total d'événements avérés ; D : nombre d'alertes détectées par les RC. (Palier intermédiaire 5–9% estimé, à ajuster si besoin.)"},
+ {id:9,domain:"D1",plafond:5,cible:"80%",rule:"pct3",t:[0.50,0.80],s:[0,3,5],
+   label:"Proportion de RC disposant de définition de cas communautaires des MPE ou modules de formation avec les définitions de cas",
+   nLabel:"Nb RC disposant de la définition de cas (sur 10 visités)", dLabel:"Nb de RC visités (10)",
+   explain:"N : nombre de RC disposant de la définition de cas communautaire des MPE (vérification physique chez 10 RC) ; D : nombre de RC visités (10)."},
+ {id:10,domain:"D2",plafond:2,cible:"Oui",rule:"oui2",s:[0,2],
+   label:"Disponibilité des définitions de cas standards des MPE (fiche technique de définition)",
+   explain:"Vérifier l'existence d'une définition de cas standard et/ou du guide technique SIMR dans la structure."},
+ {id:11,domain:"D2",plafond:2,cible:"Oui",rule:"oui2",s:[0,2],
+   label:"Disponibilité de fiches de notification conformes (nouvelles versions de fiches)",
+   explain:"Vérifier l'existence des nouveaux outils de notification dans la structure ; conserver une copie des nouvelles versions."},
+ {id:12,domain:"D2",plafond:10,cible:"85%",rule:"pct3",t:[0.50,0.85],s:[0,5,10],
+   label:"Proportion de recherches actives (sites prioritaires) réalisées par les formations sanitaires",
+   nLabel:"Nb recherches actives réalisées", dLabel:"Nb recherches actives requises",
+   explain:"N : nombre de recherches actives réalisées par la FS (sites prioritaires) ; D : nombre de recherches actives requises selon le niveau de priorité des sites."},
+ {id:13,domain:"D2",plafond:10,cible:"40%",rule:"pct3",t:[0.10,0.40],s:[0,5,10],
+   label:"Proportion de formations sanitaires ayant notifié au moins 01 cas des maladies sous surveillance au cours des 6 derniers mois",
+   nLabel:"FS ayant notifié ≥1 cas MPE (mettre 1 si oui)", dLabel:"Nb total de FS (= 1)",
+   explain:"N : la FS a-t-elle notifié au moins un cas MPE au cours des 6 derniers mois (1 si oui, 0 si non) ; D : 1."},
+ {id:14,domain:"D2",plafond:10,cible:"85%",rule:"pct3",t:[0.50,0.85],s:[0,5,10],
+   label:"Proportion de cas de maladies ou autres événements sous surveillance, notifiés à l'aide des formulaires de notification des cas",
+   nLabel:"Nb cas notifiés avec formulaire", dLabel:"Nb total de cas notifiés (rapports hebdo)",
+   explain:"N : nombre de cas notifiés à l'aide des formulaires de notification (fiches + liste linéaire) ; D : nombre total de cas notifiés dans les rapports hebdomadaires."},
+ {id:15,domain:"D3",plafond:3,cible:"80%",rule:"pct3",t:[0.50,0.80],s:[0,1,3],
+   label:"Proportion du personnel briefé sur la surveillance (rapport et liste de présence)",
+   nLabel:"Nb agents briefés (12 derniers mois)", dLabel:"Nb total d'agents de santé",
+   explain:"N : nombre d'agents de la structure briefés sur la surveillance les 12 derniers mois ; D : nombre total d'agents de santé (qualifiés et non qualifiés)."},
+ {id:16,domain:"D3",plafond:5,cible:"80%",rule:"pct3",t:[0.50,0.80],s:[0,3,5],
+   label:"Proportion de formations sanitaires privées avec tous les rapports hebdomadaires élaborés pour la période évaluée",
+   nLabel:"FS privées avec tous rapports hebdo élaborés", dLabel:"Nb total FS privées",
+   explain:"N : nombre de FS privées avec tous les rapports hebdomadaires élaborés pour la période évaluée ; D : nombre total de FS privées de l'aire sanitaire."},
+ {id:17,domain:"D3",plafond:5,cible:"80%",rule:"pct3",t:[0.50,0.80],s:[0,3,5],
+   label:"Proportion de formations sanitaires privées disposant de fiches de notification conformes et de supports de rapport hebdomadaire",
+   nLabel:"FS privées avec fiches/supports conformes", dLabel:"Nb total FS privées",
+   explain:"N : nombre de FS privées disposant de fiches de notification conformes et de supports de rapport hebdomadaire ; D : nombre total de FS privées."},
+ {id:18,domain:"D3",plafond:10,cible:"40%",rule:"pct3",t:[0.10,0.40],s:[0,5,10],
+   label:"Proportion de formations sanitaires privées ayant notifié au moins 01 cas des maladies sous surveillance au cours des 6 derniers mois",
+   nLabel:"FS privées ayant notifié ≥1 cas MPE", dLabel:"Nb total FS privées",
+   explain:"N : nombre de FS privées ayant notifié au moins 1 cas MPE au cours des 6 derniers mois ; D : nombre total de FS privées."},
+ {id:19,domain:"D4",plafond:5,cible:"80%",rule:"pct3",t:[0.50,0.80],s:[0,3,5],
+   label:"Complétude des rapports hebdomadaire des formations sanitaires",
+   nLabel:"Nb rapports hebdo disponibles", dLabel:"Nb rapports attendus (semaines épidémio.)",
+   explain:"N : nombre de rapports hebdomadaires disponibles et décomptés dans la structure ; D : nombre de rapports attendus pour la période (nb de semaines épidémiologiques)."},
+ {id:20,domain:"D4",plafond:5,cible:"80%",rule:"pct3",t:[0.50,0.80],s:[0,3,5],
+   label:"Promptitude des rapports hebdomadaires des formations sanitaire",
+   nLabel:"Nb rapports transmis à temps au CSE", dLabel:"Nb rapports attendus",
+   explain:"N : nombre de rapports hebdomadaires transmis à temps au CSE ; D : nombre de rapports attendus pour la période."},
+ {id:21,domain:"D4",plafond:10,cible:"80%",rule:"pct3",t:[0.50,0.80],s:[0,5,10],
+   label:"Proportion de fiches de notification complètement et correctement remplies",
+   nLabel:"Nb fiches complètes et correctes", dLabel:"Nb total de fiches vérifiées",
+   explain:"N : nombre de fiches de notification complètement et correctement remplies (échantillon de 10 fiches par maladie) ; D : nombre total de fiches vérifiées."},
+ {id:22,domain:"D4",plafond:3,cible:"Oui",rule:"oui2",s:[0,3],
+   label:"Disponibilité d'un tableau d'affichage des données de surveillance",
+   explain:"Vérifier la présence d'un tableau visible affichant courbes épidémiques, définitions de cas, etc."},
+ {id:23,domain:"D4",plafond:10,cible:"85%",rule:"pct3",t:[0.50,0.85],s:[0,5,10],
+   label:"Proportion de maladies prioritaires pour lesquelles un graphique existe et mis à jour",
+   nLabel:"Nb maladies prioritaires avec courbe à jour", dLabel:"Nb total maladies prioritaires (12)",
+   explain:"N : nombre de maladies prioritaires avec courbe épidémique à jour et affichée ; D : nombre total de maladies prioritaires ciblées (12)."},
+ {id:24,domain:"D4",plafond:2,cible:"Oui",rule:"oui2",s:[0,2],
+   label:"Archivage correct des fiches de notification et des rapports de l'année en cours",
+   explain:"Vérifier le rangement par semaine, par maladie ou autre ordre pour l'année en cours."},
+ {id:25,domain:"D4",plafond:2,cible:"Oui",rule:"oui2",s:[0,2],
+   label:"Archivage correct des fiches de notification et des rapports des 5 dernières années",
+   explain:"Vérifier le rangement par semaine/maladie/année, bien étiqueté, pour les 5 dernières années."},
+ {id:26,domain:"D4",plafond:5,cible:"Oui",rule:"oui2",s:[0,5],
+   label:"Existence d'une armoire pour le rangement des rapports, fiches de notification et autres documents de surveillance",
+   explain:"Vérifier la disponibilité et le bon rangement d'une armoire dédiée aux documents de surveillance."},
+ {id:27,domain:"D4",plafond:5,cible:"80%",rule:"pct3",t:[0.50,0.80],s:[0,3,5],
+   label:"Proportion de FS publiques disposant de tablette/smartphone et connexion pour la saisie dans le DHIS2",
+   nLabel:"FS publiques équipées et connectées", dLabel:"Nb total FS publiques",
+   explain:"N : nombre de FS publiques disposant de tablette/smartphone et connexion pour la saisie DHIS2 ; D : nombre total de FS publiques."},
+ {id:28,domain:"D4",plafond:5,cible:"80%",rule:"pct3",t:[0.50,0.80],s:[0,3,5],
+   label:"Proportion de FS privées disposant de tablette/smartphone et connexion pour la saisie dans le DHIS2",
+   nLabel:"FS privées équipées et connectées", dLabel:"Nb total FS privées",
+   explain:"N : nombre de FS privées disposant de tablette/smartphone et connexion pour la saisie DHIS2 ; D : nombre total de FS privées."},
+ {id:29,domain:"D4",plafond:5,cible:"80%",rule:"pct3",t:[0.50,0.80],s:[0,3,5],
+   label:"Proportion de relais communautaire disposant de tablette/smartphone et connexion pour la saisie des données",
+   nLabel:"Relais équipés et connectés", dLabel:"Nb total de relais communautaires",
+   explain:"N : nombre de relais communautaires disposant de tablette/smartphone avec connexion pour la saisie des données ; D : nombre total de relais communautaires."},
+ {id:30,domain:"D5",plafond:10,cible:"85%",rule:"pct3",t:[0.50,0.85],s:[0,5,10],
+   label:"Proportion de FS disposant de matériel de prélèvement et de transport des échantillons",
+   nLabel:"FS disposant du matériel requis", dLabel:"Nb total de FS (=1)",
+   explain:"N : la FS dispose-t-elle du matériel de prélèvement/transport (1 si oui) ; D : 1."},
+ {id:31,domain:"D5",plafond:10,cible:"85%",rule:"pct3",t:[0.50,0.85],s:[0,5,10],
+   label:"Proportion de cas suspects de maladies sous surveillance avec prélèvement réalisé pour confirmation",
+   nLabel:"Nb cas suspects prélevés", dLabel:"Nb total cas nécessitant prélèvement",
+   explain:"N : nombre de cas suspects avec prélèvement réalisé pour confirmation ; D : nombre total de cas de la période nécessitant un prélèvement."},
+ {id:32,domain:"D5",plafond:10,cible:"85%",rule:"pct3",t:[0.50,0.85],s:[0,5,10],
+   label:"Proportion de suspicions de flambée/alertes/événements déclarées au CSE dans les 24h avec fiche de notification",
+   nLabel:"Nb suspicions déclarées <24h au CSE", dLabel:"Nb total de suspicions/alertes",
+   explain:"N : nombre de suspicions de flambée/alertes/événements déclarées au CSE dans les 24h avec fiche de notification ; D : nombre total de suspicions/alertes de la période."},
+];
+
+const EXACT_SOURCES = [
+  "Fiche de notification archivée à la FS",
+  "Rapport hebdomadaire archivé à la FS",
+  "Rapport hebdomadaire FS transmis au CSE",
+  "Base SIMR au CSE",
+  "DHIS2 au CSE",
+];
+const EXACT_DISCORD = [
+  {label:"Discordance fiche et rapport archivés à la FS (%)", a:0, b:1},
+  {label:"Discordance rapport archivé à la FS et rapport transmis au CSE (%)", a:1, b:2},
+  {label:"Discordance rapport transmis au CSE et base SIMR (%)", a:2, b:3},
+  {label:"Discordance entre rapport transmis au CSE et DHIS2 (%)", a:2, b:4},
+];
+
+const EVALUATEUR_ROLES = [
+  {key:"eval1", label:"Évaluateur 1"},
+  {key:"eval2", label:"Évaluateur 2"},
+  {key:"rapporteur", label:"Rapporteur"},
+  {key:"sup1", label:"Superviseur 1"},
+  {key:"sup2", label:"Superviseur 2"},
+  {key:"sup3", label:"Superviseur 3"},
+];
+const PHOTO_SLOTS = [
+  {key:"main", fixedTitle:"Photo de la séance avec tous les acteurs", editableTitle:false},
+  {key:"extra1", fixedTitle:"", editableTitle:true},
+  {key:"extra2", fixedTitle:"", editableTitle:true},
+];
+
+/* =========================================================================
+   PERSISTANCE
+   ========================================================================= */
+const LS_CENTERS = "tdes_centers_v3";
+const LS_DATA_PREFIX = "tdes_fsdata_v3_";
+const LS_ADMIN_PASS = "tdes_admin_pass_v1";
+const LS_USERS = "tdes_users_v1";
+const LS_ZSMANAGERS = "tdes_zsmanagers_v1";
+const DEFAULT_PASS = "admin123";
+const SS_SESSION = "tdes_session_v1"; // {role:'admin'|'user', userId}
+
+/* --- Backend partagé (Google Sheets via Apps Script) --- */
+const LS_BACKEND_URL = "tdes_backend_url_v1";
+const LS_BACKEND_SECRET = "tdes_backend_secret_v1";
+const LS_BACKEND_ADMIN_KEY = "tdes_backend_admin_key_v1";
+const LS_LAST_SYNC = "tdes_last_sync_v1";
+
+// Valeurs de départ pré-remplies : l'URL de l'application Web Apps Script et la
+// clé SECRET partagée (celle qui protège juste l'accès général à l'API, PAS un
+// accès aux données — voir Code.gs). Comme ce fichier est ce que tout le monde
+// télécharge depuis GitHub, personne n'a besoin de les ressaisir : chaque
+// équipe/gestionnaire se connecte directement avec son identifiant/mot de passe.
+// Reste modifiable depuis « ⚙ Paramètres de synchronisation » si besoin (ex. si
+// un jour tu changes de classeur Google Sheets ou de clé SECRET).
+// ⚠ La clé ADMIN, elle, n'est JAMAIS pré-remplie ici : elle donne un accès total
+// (lecture/écriture sur tout) et doit rester saisie à la main, uniquement sur le
+// ou les appareils de l'administrateur — voir la question "à quoi sert la clé
+// ADMIN ?" juste en dessous du formulaire de connexion admin.
+const DEFAULT_BACKEND_URL = "https://script.google.com/macros/s/AKfycbyQ5JzsErwd-b4q1tzevWldvdbFX9pTi0gS7GarusENcnnb-p2dkVQnBh62YBywLWAo3w/exec";
+const DEFAULT_BACKEND_SECRET = "FS2026";
+
+let backendUrl = localStorage.getItem(LS_BACKEND_URL) || DEFAULT_BACKEND_URL;
+let backendSecret = localStorage.getItem(LS_BACKEND_SECRET) || DEFAULT_BACKEND_SECRET;
+let backendAdminKey = localStorage.getItem(LS_BACKEND_ADMIN_KEY) || "";
+function backendConfigured(){ return !!backendUrl; }
+
+// Identifiants envoyés au serveur pour que celui-ci applique le bon niveau
+// d'accès (le serveur ne fait plus confiance au client pour décider ce qu'il
+// a le droit de lire/écrire).
+function authParams(){
+  if(ROLE === 'admin') return { role:'admin', akey: backendAdminKey };
+  if(ROLE === 'user' && CURRENT_USER) return { role:'user', uid: CURRENT_USER.username, upass: CURRENT_USER.password };
+  if(ROLE === 'zsmanager' && CURRENT_ZSMANAGER) return { role:'zsmanager', zid: CURRENT_ZSMANAGER.username, zpass: CURRENT_ZSMANAGER.password };
+  return { role:'none' };
+}
+
+// Les photos (base64) sont volumineuses : Google Sheets limite chaque cellule
+// à ~50 000 caractères. On les garde en local sur l'appareil de saisie et on
+// ne synchronise PAS leur contenu binaire (seuls les titres sont synchronisés).
+// Utilisez l'export/import .json pour transmettre les photos si besoin.
+function stripHeavyForSync(key, value){
+  if(key.startsWith(LS_DATA_PREFIX) && value && value.photos){
+    const clone = JSON.parse(JSON.stringify(value));
+    Object.keys(clone.photos).forEach(k => { clone.photos[k].data = ""; });
+    return clone;
+  }
+  return value;
+}
+
+async function pushToBackend(key, value){
+  if(!backendConfigured()) return;
+  try{
+    const res = await fetch(backendUrl, {
+      method: 'POST',
+      headers: {'Content-Type':'text/plain;charset=utf-8'}, // évite le préflight CORS
+      body: JSON.stringify(Object.assign({ action:'set', secret: backendSecret, items:[{ key, value: JSON.stringify(stripHeavyForSync(key, value)) }] }, authParams()))
+    });
+    const json = await res.json();
+    if(json && json.error === 'forbidden'){ console.warn('Synchronisation refusée par le serveur (droits insuffisants) pour la clé', key); }
+  }catch(e){ console.warn('Synchronisation (envoi) échouée :', e); }
+}
+
+function applyRemoteUpdate(key, val){
+  if(key === LS_CENTERS){
+    localStorage.setItem(LS_CENTERS, JSON.stringify(val));
+    centers = val;
+  } else if(key === LS_USERS){
+    localStorage.setItem(LS_USERS, JSON.stringify(val));
+    users = val;
+  } else if(key === LS_ZSMANAGERS){
+    localStorage.setItem(LS_ZSMANAGERS, JSON.stringify(val));
+    zsManagers = val;
+  } else if(key.startsWith(LS_DATA_PREFIX)){
+    // ne pas écraser des photos locales par une version distante sans photos
+    const existingRaw = localStorage.getItem(key);
+    if(existingRaw){
+      try{
+        const existing = JSON.parse(existingRaw);
+        if(existing.photos && val.photos){
+          Object.keys(val.photos).forEach(k => { if(!val.photos[k].data && existing.photos[k]) val.photos[k].data = existing.photos[k].data; });
+        }
+      }catch(e){}
+    }
+    localStorage.setItem(key, JSON.stringify(val));
+    const cid = key.slice(LS_DATA_PREFIX.length);
+    if(cid === currentCenterId && !dirtyFs){ currentFsData = loadFsData(currentCenterId); }
+  }
+}
+
+async function pullFromBackend(){
+  if(!backendConfigured()) return;
+  try{
+    const since = localStorage.getItem(LS_LAST_SYNC) || "0";
+    const auth = authParams();
+    let url = backendUrl + (backendUrl.includes('?') ? '&' : '?') + 'action=get&secret=' + encodeURIComponent(backendSecret) + '&since=' + since;
+    Object.keys(auth).forEach(k => { url += '&' + k + '=' + encodeURIComponent(auth[k]); });
+    const res = await fetch(url);
+    const json = await res.json();
+    if(json.error){ console.warn('Erreur backend :', json.error); return; }
+    let changed = false;
+    (json.rows||[]).forEach(r => {
+      try{ applyRemoteUpdate(r.key, JSON.parse(r.value)); changed = true; }catch(e){}
+    });
+    if(json.serverTime) localStorage.setItem(LS_LAST_SYNC, String(json.serverTime));
+    if(changed) onRemoteDataChanged();
+  }catch(e){ console.warn('Synchronisation (réception) échouée :', e); }
+}
+function onRemoteDataChanged(){
+  if(!ROLE) return;
+  refreshFsSelect();
+  renderAllTools();
+  updateSyncIndicator(true);
+}
+function updateSyncIndicator(justSynced){
+  const el = document.getElementById('syncIndicator');
+  if(!el) return;
+  if(!backendConfigured()){ el.textContent = "⚠ Mode local (pas de serveur configuré)"; el.className = "sync-indicator off"; return; }
+  el.textContent = justSynced ? "🔄 Synchronisé à " + new Date().toLocaleTimeString('fr-FR') : "🔄 Synchronisation active";
+  el.className = "sync-indicator on";
+}
+let syncPollTimer = null;
+function startSyncPolling(){
+  if(syncPollTimer) clearInterval(syncPollTimer);
+  if(!backendConfigured()) { updateSyncIndicator(); return; }
+  pullFromBackend();
+  syncPollTimer = setInterval(pullFromBackend, 20000); // ~temps réel : toutes les 20s
+  updateSyncIndicator();
+}
+
+function loadCenters(){ try{ const raw = localStorage.getItem(LS_CENTERS); return raw ? JSON.parse(raw) : []; }catch(e){ return []; } }
+function saveCenters(list){
+  try{ localStorage.setItem(LS_CENTERS, JSON.stringify(list)); }catch(e){ alert("Erreur d'enregistrement local : " + e.message); }
+  pushToBackend(LS_CENTERS, list);
+}
+function loadUsers(){ try{ const raw = localStorage.getItem(LS_USERS); return raw ? JSON.parse(raw) : []; }catch(e){ return []; } }
+function saveUsers(list){
+  try{ localStorage.setItem(LS_USERS, JSON.stringify(list)); }catch(e){ alert("Erreur d'enregistrement local : " + e.message); }
+  pushToBackend(LS_USERS, list);
+}
+function loadZsManagers(){ try{ const raw = localStorage.getItem(LS_ZSMANAGERS); return raw ? JSON.parse(raw) : []; }catch(e){ return []; } }
+function saveZsManagers(list){
+  try{ localStorage.setItem(LS_ZSMANAGERS, JSON.stringify(list)); }catch(e){ alert("Erreur d'enregistrement local : " + e.message); }
+  pushToBackend(LS_ZSMANAGERS, list);
+}
+function getAdminPass(){ return localStorage.getItem(LS_ADMIN_PASS) || DEFAULT_PASS; }
+
+function defaultFsData(){
+  const inputs = {};
+  INDICATORS.forEach(ind => inputs[ind.id] = ind.rule === "oui2" ? {b:"Non"} : {n:0, d:0});
+  const sources = EXACT_SOURCES.map(()=> ({simr:0, dcm:0, dcn:0, d5:0}));
+  const synth = {};
+  DOMAINS.forEach(d => synth[d.key] = { forts:["","","","",""], ameliorer:["","","","",""], reco:["","","","",""] });
+  const plan = Array.from({length:5}, () => ({domain:"", indicateur:"", ameliorer:"", cause:"", activite:"", cout:""}));
+  const photos = {}; PHOTO_SLOTS.forEach(p => photos[p.key] = {title:"", data:""});
+  const evaluateurs = {}; EVALUATEUR_ROLES.forEach(r => evaluateurs[r.key] = {nom:"", qualif:"", contact:""});
+  return { inputs, sources, synth, plan, photos, evaluateurs, locked:false, sent:false, sentAt:null, touched:{}, touchedSrc:{} };
+}
+function loadFsData(centerId){
+  try{
+    const raw = localStorage.getItem(LS_DATA_PREFIX + centerId);
+    if(!raw) return defaultFsData();
+    const parsed = JSON.parse(raw);
+    const base = defaultFsData();
+    if(parsed.inputs) Object.keys(parsed.inputs).forEach(k => base.inputs[k] = Object.assign(base.inputs[k]||{}, parsed.inputs[k]));
+    if(parsed.sources) base.sources = parsed.sources;
+    if(parsed.synth) Object.keys(parsed.synth).forEach(k => { if(base.synth[k]) base.synth[k] = Object.assign(base.synth[k], parsed.synth[k]); });
+    if(parsed.plan && parsed.plan.length) base.plan = parsed.plan;
+    if(parsed.photos) Object.keys(parsed.photos).forEach(k => { if(base.photos[k]) base.photos[k] = Object.assign(base.photos[k], parsed.photos[k]); });
+    if(parsed.evaluateurs) Object.keys(parsed.evaluateurs).forEach(k => { if(base.evaluateurs[k]) base.evaluateurs[k] = Object.assign(base.evaluateurs[k], parsed.evaluateurs[k]); });
+    base.locked = !!parsed.locked;
+    base.sent = !!parsed.sent;
+    base.sentAt = parsed.sentAt || null;
+    base.touched = parsed.touched || {};
+    base.touchedSrc = parsed.touchedSrc || {};
+    return base;
+  }catch(e){ return defaultFsData(); }
+}
+function saveFsData(centerId, data){
+  try{ localStorage.setItem(LS_DATA_PREFIX + centerId, JSON.stringify(data)); }catch(e){ alert("Erreur d'enregistrement local (quota dépassé ?) : " + e.message); }
+  pushToBackend(LS_DATA_PREFIX + centerId, data);
+}
+
+/* =========================================================================
+   ENREGISTREMENT DIFFÉRÉ — pas de sauvegarde à chaque frappe.
+   Les modifications sont gardées en mémoire et écrites au maximum toutes les
+   60 secondes, ou immédiatement via le bouton « Enregistrer », ou lors d'un
+   changement de FS / déconnexion / fermeture de page.
+   ========================================================================= */
+let dirtyFs = false, dirtyCenters = false, dirtyUsers = false;
+let lastSavedAt = null;
+const AUTOSAVE_INTERVAL_MS = 60000;
+
+function markFsDirty(){ dirtyFs = true; updateSaveIndicator(); }
+function markCentersDirty(){ dirtyCenters = true; updateSaveIndicator(); }
+function markUsersDirty(){ dirtyUsers = true; updateSaveIndicator(); }
+
+function flushSaves(){
+  if(dirtyFs && currentCenterId){ saveFsData(currentCenterId, currentFsData); dirtyFs = false; }
+  if(dirtyCenters){ saveCenters(centers); dirtyCenters = false; }
+  if(dirtyUsers){ saveUsers(users); dirtyUsers = false; }
+  lastSavedAt = new Date();
+  updateSaveIndicator();
+}
+function hasUnsavedChanges(){ return dirtyFs || dirtyCenters || dirtyUsers; }
+
+function updateSaveIndicator(){
+  const el = document.getElementById('saveIndicator');
+  if(!el) return;
+  if(hasUnsavedChanges()){
+    el.textContent = "● Modifications non enregistrées";
+    el.className = "save-indicator dirty";
+  } else if(lastSavedAt){
+    el.textContent = "✓ Enregistré à " + lastSavedAt.toLocaleTimeString('fr-FR');
+    el.className = "save-indicator clean";
+  } else {
+    el.textContent = "";
+    el.className = "save-indicator";
+  }
+}
+
+setInterval(() => { if(hasUnsavedChanges()) flushSaves(); }, AUTOSAVE_INTERVAL_MS);
+window.addEventListener('beforeunload', (e) => {
+  if(hasUnsavedChanges()){
+    flushSaves();
+  }
+});
+
+let centers = loadCenters();
+let users = loadUsers();
+let zsManagers = loadZsManagers();
+let currentCenterId = null;
+let currentFsData = defaultFsData();
+let ROLE = null;        // 'admin' | 'zsmanager' | 'user'
+let CURRENT_USER = null; // user record when ROLE==='user'
+let CURRENT_ZSMANAGER = null; // zsmanager record when ROLE==='zsmanager'
+
+function uid(){ return 'c' + Math.random().toString(36).slice(2,9); }
+function uidU(){ return 'u' + Math.random().toString(36).slice(2,9); }
+function uidZ(){ return 'z' + Math.random().toString(36).slice(2,9); }
+
+function ensureAdminOverrides(c){
+  if(!c.adminOverrides) c.adminOverrides = {};
+  if(!c.overridesTouched) c.overridesTouched = {};
+  ADMIN_CONTROLLED_IDS.forEach(id => {
+    if(!c.adminOverrides[id]) c.adminOverrides[id] = {n:0, d:0};
+  });
+  return c;
+}
+function ensureAdminSources(c){
+  if(!c.adminSources) c.adminSources = {};
+  if(!c.adminSourcesTouched) c.adminSourcesTouched = {};
+  ADMIN_CONTROLLED_SRC_IDX.forEach(idx => {
+    if(!c.adminSources[idx]) c.adminSources[idx] = {simr:0, dcm:0, dcn:0, d5:0};
+  });
+  return c;
+}
+centers.forEach(c => { ensureAdminOverrides(c); ensureAdminSources(c); });
+
+if(centers.length === 0){
+  const c = {id: uid(), order:1, name:"FS1", type:"Publique", departement:"", zone:"", commune:"", date:""};
+  ensureAdminOverrides(c); ensureAdminSources(c);
+  centers.push(c); saveCenters(centers);
+}
+
+function currentCenter(){ return centers.find(c => c.id === currentCenterId) || null; }
+// fusionne les données saisies par l'équipe avec les valeurs centralisées par l'administrateur
+// (Id 12, 19, 20) qui priment toujours pour ces indicateurs
+function effInputs(center, fsData){
+  const merged = {};
+  Object.keys(fsData.inputs).forEach(k => merged[k] = fsData.inputs[k]);
+  if(center && center.adminOverrides){
+    ADMIN_CONTROLLED_IDS.forEach(id => { if(center.adminOverrides[id]) merged[id] = center.adminOverrides[id]; });
+  }
+  return merged;
+}
+// fusionne les sources de l'Outil 3 saisies par l'équipe (idx 0,1) avec les sources
+// centralisées par l'administrateur/gestionnaire ZS (idx 2,3,4 : Rapport CSE, Base SIMR, DHIS2)
+function effSources(center, fsData){
+  ensureAdminSources(center);
+  return EXACT_SOURCES.map((_, idx) => ADMIN_CONTROLLED_SRC_IDX.includes(idx) ? center.adminSources[idx] : fsData.sources[idx]);
+}
+// un manager de Zone Sanitaire ou l'admin peut gérer un centre donné
+function canManageCenter(center){
+  if(ROLE === 'admin') return true;
+  if(ROLE === 'zsmanager' && CURRENT_ZSMANAGER) return center && center.zone === CURRENT_ZSMANAGER.zone;
+  return false;
+}
+function hasAdminAccess(){ return ROLE === 'admin' || ROLE === 'zsmanager'; }
+function visibleCenters(){
+  if(ROLE === 'admin') return centers.slice().sort((a,b)=>a.order-b.order);
+  if(ROLE === 'zsmanager' && CURRENT_ZSMANAGER) return centers.filter(c => c.zone === CURRENT_ZSMANAGER.zone).sort((a,b)=>a.order-b.order);
+  if(ROLE === 'user' && CURRENT_USER) return centers.filter(c => (CURRENT_USER.centerIds||[]).includes(c.id)).sort((a,b)=>a.order-b.order);
+  return [];
+}
+// équipes visibles dans le panneau Administration selon le rôle
+function visibleUsers(){
+  if(ROLE === 'admin') return users;
+  if(ROLE === 'zsmanager' && CURRENT_ZSMANAGER) return users.filter(u => u.createdByZone === CURRENT_ZSMANAGER.zone);
+  return [];
+}
+
+/* =========================================================================
+   LOGIQUE DE CALCUL
+   ========================================================================= */
+function indicatorApplicable(center, ind){
+  if(!center) return true;
+  const list = NA_INDICATORS_BY_TYPE[center.type] || [];
+  return !list.includes(ind.id);
+}
+function domainFullyNA(center, domainKey){
+  const inds = INDICATORS.filter(i => i.domain === domainKey);
+  return inds.every(i => !indicatorApplicable(center, i));
+}
+function domainPlafondFor(center, domainKey){
+  return INDICATORS.filter(i => i.domain === domainKey && indicatorApplicable(center, i))
+                    .reduce((s,i)=> s + i.plafond, 0);
+}
+function ratioOf(ind, inp){
+  if(ind.rule === "oui2") return null;
+  const n = parseFloat(inp.n) || 0;
+  const d = parseFloat(inp.d) || 0;
+  return d > 0 ? n / d : 0;
+}
+function scoreFor(ind, inp){
+  if(ind.rule === "oui2") return (inp.b === "Oui") ? ind.s[1] : ind.s[0];
+  const val = ratioOf(ind, inp);
+  const [t1,t2] = ind.t; const [s0,s1,s2] = ind.s;
+  if(val < t1) return s0; if(val < t2) return s1; return s2;
+}
+function pctAtteintFor(ind, inp){ if(ind.plafond === 0) return 0; return scoreFor(ind, inp) / ind.plafond; }
+function valeurAtteinteDisplay(ind, inp){
+  if(ind.rule === "oui2") return inp.b;
+  const val = ratioOf(ind, inp);
+  if(ind.rule === "num3") return val.toFixed(1);
+  return (val*100).toFixed(0) + "%";
+}
+function computeDomainScores(center, inputs){
+  const res = {};
+  DOMAINS.forEach(d => {
+    const na = domainFullyNA(center, d.key);
+    const plafond = domainPlafondFor(center, d.key);
+    let score = 0;
+    if(!na){
+      INDICATORS.filter(i => i.domain === d.key && indicatorApplicable(center, i)).forEach(ind => { score += scoreFor(ind, inputs[ind.id]); });
+    }
+    res[d.key] = {score, plafond, na};
+  });
+  return res;
+}
+function totalPlafond(center){ return DOMAINS.reduce((s,d)=> s + domainPlafondFor(center, d.key), 0); }
+function totalScore(center, inputs){
+  const ds = computeDomainScores(center, inputs);
+  return DOMAINS.reduce((s,d)=> s + ds[d.key].score, 0);
+}
+function pct(n,d){ return d ? (n/d) : 0; }
+function fmtPct(x){ return (x*100).toFixed(0) + "%"; }
+function performanceBadge(fraction){
+  if(fraction < 0.5) return {cls:"faible", label:"Performance faible"};
+  if(fraction < 0.85) return {cls:"moyenne", label:"Performance moyenne"};
+  return {cls:"bonne", label:"Bonne performance"};
+}
+function ragClass(fraction){ if(fraction < 0.5) return "rag-red"; if(fraction < 0.85) return "rag-yellow"; return "rag-green"; }
+function ragLabel(fraction){ if(fraction < 0.5) return "Rouge"; if(fraction < 0.85) return "Jaune"; return "Vert"; }
+
+/* =========================================================================
+   LOGIN / SESSION
+   ========================================================================= */
+const loginScreen = document.getElementById('loginScreen');
+const loginError = document.getElementById('loginError');
+const whoamiBadge = document.getElementById('whoamiBadge');
+
+document.querySelectorAll('.login-tabs button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.login-tabs button').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    document.querySelectorAll('.login-pane').forEach(p=>p.classList.remove('active'));
+    document.getElementById(loginPaneIdFor(btn.dataset.loginTab)).classList.add('active');
+    loginError.style.display = "none";
+  });
+});
+
+function loginPaneIdFor(tab){
+  if(tab === 'admin') return 'loginPaneAdmin';
+  if(tab === 'zsmanager') return 'loginPaneZsmanager';
+  return 'loginPaneUser';
+}
+
+function showLoginError(msg){ loginError.textContent = msg; loginError.style.display = ""; }
+
+document.getElementById('btnToggleSyncSettings').addEventListener('click', () => {
+  const pane = document.getElementById('syncSettingsPane');
+  const opening = !pane.classList.contains('active');
+  document.querySelectorAll('.login-pane').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.login-tabs button').forEach(b=>b.classList.remove('active'));
+  if(opening){
+    pane.classList.add('active');
+    document.getElementById('syncUrlInput').value = backendUrl;
+    document.getElementById('syncSecretInput').value = backendSecret;
+    document.getElementById('syncAdminKeyInput').value = backendAdminKey;
+  } else {
+    document.getElementById(loginPaneIdFor(document.querySelector('.login-tabs button').dataset.loginTab)).classList.add('active');
+    document.querySelector('.login-tabs button').classList.add('active');
+  }
+});
+document.getElementById('btnSaveSyncSettings').addEventListener('click', () => {
+  backendUrl = document.getElementById('syncUrlInput').value.trim();
+  backendSecret = document.getElementById('syncSecretInput').value.trim();
+  backendAdminKey = document.getElementById('syncAdminKeyInput').value.trim();
+  localStorage.setItem(LS_BACKEND_URL, backendUrl);
+  localStorage.setItem(LS_BACKEND_SECRET, backendSecret);
+  localStorage.setItem(LS_BACKEND_ADMIN_KEY, backendAdminKey);
+  alert(backendUrl ? "Paramètres serveur enregistrés. La synchronisation démarrera après connexion." : "Mode local activé (pas de serveur configuré).");
+});
+
+document.getElementById('btnAdminLogin').addEventListener('click', () => {
+  const pass = document.getElementById('adminLoginPassword').value;
+  if(pass === getAdminPass()){
+    startSession('admin', null);
+  } else showLoginError("Mot de passe administrateur incorrect.");
+});
+document.getElementById('btnUserLogin').addEventListener('click', () => {
+  attemptLogin('user', 'btnUserLogin', document.getElementById('userLoginUsername').value.trim(), document.getElementById('userLoginPassword').value);
+});
+document.getElementById('btnZsLogin').addEventListener('click', () => {
+  attemptLogin('zsmanager', 'btnZsLogin', document.getElementById('zsLoginUsername').value.trim(), document.getElementById('zsLoginPassword').value);
+});
+
+// Connexion équipe / gestionnaire de zone.
+// 1) On regarde d'abord si le compte est déjà connu localement (accès instantané,
+//    fonctionne même hors ligne une fois qu'un appareil a déjà synchronisé une fois).
+// 2) S'il ne l'est pas (nouvel appareil / navigateur jamais synchronisé, ou
+//    "tout repart de zéro"), on vérifie directement l'identifiant/mot de passe
+//    auprès du serveur, SANS attendre un cycle de synchronisation préalable.
+//    Si le serveur confirme le compte, on récupère au passage tout ce qui lui
+//    est déjà accessible (centres, équipes de sa zone le cas échéant, données
+//    déjà saisies) et on enregistre la fiche de compte localement pour que les
+//    connexions suivantes sur ce même appareil soient instantanées.
+async function attemptLogin(role, btnId, username, pass){
+  if(!username || !pass){ showLoginError("Veuillez renseigner l'identifiant et le mot de passe."); return; }
+
+  const localArr = role === 'user' ? users : zsManagers;
+  const local = localArr.find(x => x.username === username && x.password === pass);
+  if(local){ startSession(role, local.id); return; }
+
+  if(!backendConfigured()){
+    showLoginError("Compte introuvable sur cet appareil. Ouvrez « ⚙ Paramètres de synchronisation » et renseignez l'URL + la clé secrète pour vérifier votre compte en ligne.");
+    return;
+  }
+
+  const btn = document.getElementById(btnId);
+  const originalLabel = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = "Vérification…";
+  loginError.style.display = "none";
+  try{
+    const result = await verifyAccountOnServer(role, username, pass);
+    if(!result || !result.self){
+      showLoginError("Identifiant ou mot de passe incorrect.");
+      return;
+    }
+    applyServerLoginResult(role, result);
+    startSession(role, result.self.id);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = originalLabel;
+  }
+}
+
+// Interroge directement le backend avec les identifiants saisis (indépendamment
+// de tout compte déjà connu localement) et récupère, en un seul appel, la fiche
+// de compte de l'utilisateur ainsi que tout ce qui lui est accessible.
+async function verifyAccountOnServer(role, username, pass){
+  try{
+    let url = backendUrl + (backendUrl.includes('?') ? '&' : '?') + 'action=get&secret=' + encodeURIComponent(backendSecret) + '&since=0';
+    if(role === 'user'){
+      url += '&role=user&uid=' + encodeURIComponent(username) + '&upass=' + encodeURIComponent(pass);
+    } else if(role === 'zsmanager'){
+      url += '&role=zsmanager&zid=' + encodeURIComponent(username) + '&zpass=' + encodeURIComponent(pass);
+    } else {
+      return null;
+    }
+    const res = await fetch(url);
+    const json = await res.json();
+    if(!json || json.error || !json.ok) return null;
+    return json;
+  }catch(e){
+    console.warn('Vérification du compte auprès du serveur échouée :', e);
+    showLoginError("Impossible de contacter le serveur pour vérifier ce compte (connexion internet ? paramètres de synchronisation corrects ?).");
+    return null;
+  }
+}
+
+// Applique la réponse du serveur après une connexion vérifiée à distance :
+// enregistre localement les données auxquelles ce compte a accès (centres,
+// équipes de sa zone le cas échéant, saisies déjà faites) ainsi que sa propre
+// fiche de compte (self), pour que les prochaines connexions sur cet appareil
+// n'aient plus besoin de repasser par le serveur.
+function applyServerLoginResult(role, result){
+  (result.rows || []).forEach(r => {
+    try{ applyRemoteUpdate(r.key, JSON.parse(r.value)); }catch(e){}
+  });
+  if(result.serverTime) localStorage.setItem(LS_LAST_SYNC, String(result.serverTime));
+
+  if(role === 'user'){
+    users = upsertLocalAccount(users, LS_USERS, result.self);
+  } else if(role === 'zsmanager'){
+    zsManagers = upsertLocalAccount(zsManagers, LS_ZSMANAGERS, result.self);
+  }
+}
+
+function upsertLocalAccount(arr, storageKey, self){
+  const next = arr.filter(x => x.id !== self.id);
+  next.push(self);
+  try{ localStorage.setItem(storageKey, JSON.stringify(next)); }catch(e){}
+  return next;
+}
+document.getElementById('btnLogout').addEventListener('click', () => {
+  flushSaves();
+  sessionStorage.removeItem(SS_SESSION);
+  location.reload();
+});
+document.getElementById('btnSaveNow').addEventListener('click', () => {
+  flushSaves();
+});
+
+function startSession(role, userId){
+  ROLE = role;
+  CURRENT_USER = role === 'user' ? users.find(u=>u.id===userId) : null;
+  CURRENT_ZSMANAGER = role === 'zsmanager' ? zsManagers.find(z=>z.id===userId) : null;
+  sessionStorage.setItem(SS_SESSION, JSON.stringify({role, userId}));
+  enterApp();
+}
+
+function enterApp(){
+  loginScreen.style.display = "none";
+  document.getElementById('btnLogout').style.display = "";
+  const nav = document.querySelectorAll('nav.tabs button');
+  if(ROLE === 'admin'){
+    whoamiBadge.textContent = "Administrateur";
+    nav.forEach(b => b.classList.remove('hidden-tab'));
+    openTab('admin');
+  } else if(ROLE === 'zsmanager'){
+    whoamiBadge.textContent = "Gestionnaire ZS : " + (CURRENT_ZSMANAGER ? CURRENT_ZSMANAGER.zone : "");
+    nav.forEach(b => b.classList.remove('hidden-tab'));
+    const vc = visibleCenters();
+    currentCenterId = vc.length ? vc[0].id : null;
+    currentFsData = currentCenterId ? loadFsData(currentCenterId) : defaultFsData();
+    openTab('admin');
+  } else {
+    whoamiBadge.textContent = "Équipe : " + (CURRENT_USER ? CURRENT_USER.teamName : "");
+    document.querySelector('nav.tabs button[data-tab="admin"]').classList.add('hidden-tab');
+    const vc = visibleCenters();
+    currentCenterId = vc.length ? vc[0].id : null;
+    currentFsData = currentCenterId ? loadFsData(currentCenterId) : defaultFsData();
+    openTab('outil1');
+  }
+  refreshFsSelect();
+  renderAllTools();
+  startSyncPolling();
+}
+
+// tente de restaurer une session existante (même onglet navigateur)
+(function tryRestoreSession(){
+  try{
+    const raw = sessionStorage.getItem(SS_SESSION);
+    if(!raw) return;
+    const s = JSON.parse(raw);
+    if(s.role === 'admin'){ ROLE='admin'; CURRENT_USER=null; CURRENT_ZSMANAGER=null; enterApp(); }
+    else if(s.role === 'user'){
+      const u = users.find(x=>x.id===s.userId);
+      if(u){ ROLE='user'; CURRENT_USER=u; CURRENT_ZSMANAGER=null; enterApp(); }
+    } else if(s.role === 'zsmanager'){
+      const z = zsManagers.find(x=>x.id===s.userId);
+      if(z){ ROLE='zsmanager'; CURRENT_ZSMANAGER=z; CURRENT_USER=null; enterApp(); }
+    }
+  }catch(e){}
+})();
+
+/* =========================================================================
+   RENDU — ADMIN : centres
+   ========================================================================= */
+const adminBody = document.getElementById('adminBody');
+const STRUCT_TYPES = ["Publique", "Privée", "Hôpital"];
+
+function renderAdmin(){
+  if(!hasAdminAccess()) return;
+  document.getElementById('adminNoAccess').style.display = "none";
+  document.getElementById('adminUnlocked').style.display = "";
+  document.getElementById('cardZsManagers').style.display = (ROLE === 'admin') ? "" : "none";
+  const scoped = visibleCenters();
+  adminBody.innerHTML = "";
+  scoped.forEach((c) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td class="center"><input type="number" min="1" value="${c.order}" data-field="order" style="width:60px;text-align:center;"></td>
+      <td><input type="text" value="${escapeAttr(c.name)}" data-field="name" placeholder="Nom de la FS"></td>
+      <td><select data-field="type">${STRUCT_TYPES.map(t=>`<option value="${t}" ${c.type===t?"selected":""}>${t}</option>`).join('')}</select></td>
+      <td><input type="text" value="${escapeAttr(c.departement)}" data-field="departement"></td>
+      <td><input type="text" value="${escapeAttr(c.zone)}" data-field="zone" ${ROLE==='zsmanager'?'readonly title="Fixé par votre zone de gestion"':''}></td>
+      <td><input type="text" value="${escapeAttr(c.commune)}" data-field="commune"></td>
+      <td><input type="date" value="${escapeAttr(c.date)}" data-field="date"></td>
+      <td class="center"><button class="icon-btn" title="Supprimer">✕</button></td>
+    `;
+    tr.querySelectorAll('input,select').forEach(inp => {
+      inp.addEventListener('input', () => {
+        const field = inp.dataset.field;
+        if(field === 'zone' && ROLE === 'zsmanager') return; // verrouillé
+        c[field] = field === 'order' ? (parseInt(inp.value)||1) : inp.value;
+        saveCenters(centers);
+        refreshFsSelect(); renderAllTools(); renderTracking(); renderAggregates(); renderOverrides(); renderAdminSrc(); renderUsers();
+      });
+    });
+    tr.querySelector('.icon-btn').addEventListener('click', () => {
+      if(!confirm(`Supprimer "${c.name}" et toutes ses données de collecte ?`)) return;
+      localStorage.removeItem(LS_DATA_PREFIX + c.id);
+      centers = centers.filter(x => x.id !== c.id);
+      saveCenters(centers);
+      users.forEach(u => { u.centerIds = (u.centerIds||[]).filter(id=>id!==c.id); });
+      saveUsers(users);
+      if(currentCenterId === c.id){
+        const vc = visibleCenters();
+        currentCenterId = vc.length ? vc[0].id : null;
+        currentFsData = currentCenterId ? loadFsData(currentCenterId) : defaultFsData();
+      }
+      renderAdmin(); refreshFsSelect(); renderAllTools(); renderTracking(); renderAggregates(); renderOverrides(); renderAdminSrc(); renderUsers();
+    });
+    adminBody.appendChild(tr);
+  });
+}
+function escapeAttr(s){ return (s||"").toString().replace(/"/g,'&quot;'); }
+function escapeHtml(s){ return (s||"").toString().replace(/[&<>"]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m])); }
+
+document.getElementById('btnAddCenter').addEventListener('click', () => {
+  const maxOrder = centers.reduce((m,c)=>Math.max(m,c.order),0);
+  const zoneVal = ROLE === 'zsmanager' && CURRENT_ZSMANAGER ? CURRENT_ZSMANAGER.zone : "";
+  const c = {id: uid(), order:maxOrder+1, name:`FS${maxOrder+1}`, type:"Publique", departement:"", zone:zoneVal, commune:"", date:""};
+  ensureAdminOverrides(c); ensureAdminSources(c);
+  centers.push(c); saveCenters(centers);
+  if(!currentCenterId){ currentCenterId = c.id; currentFsData = loadFsData(c.id); }
+  renderAdmin(); refreshFsSelect(); renderAllTools(); renderTracking(); renderAggregates(); renderOverrides(); renderAdminSrc(); renderUsers();
+});
+
+/* --- Import en masse d'une liste de centres (.xlsx / .csv) --- */
+function normalizeHeader(s){
+  return (s||"").toString().trim().toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g,''); // retire les accents
+}
+const CENTER_COLUMN_ALIASES = {
+  name: ['nom', 'nom de la fs', 'fs', 'nom du centre', 'formation sanitaire'],
+  type: ['type', 'type de structure', 'structure'],
+  departement: ['departement', 'département'],
+  zone: ['zone', 'zone sanitaire', 'zs'],
+  commune: ['commune'],
+};
+function mapImportedRow(headerMap, row){
+  const get = (field) => {
+    const idx = headerMap[field];
+    return idx === undefined ? "" : (row[idx] === undefined || row[idx] === null ? "" : String(row[idx]).trim());
+  };
+  return { name: get('name'), type: get('type'), departement: get('departement'), zone: get('zone'), commune: get('commune') };
+}
+document.getElementById('fileImportCenters').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    try{
+      const wb = XLSX.read(ev.target.result, {type:'array'});
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws, {header:1});
+      if(!rows.length){ alert("Fichier vide."); return; }
+      const headerRow = rows[0].map(normalizeHeader);
+      const headerMap = {};
+      Object.keys(CENTER_COLUMN_ALIASES).forEach(field => {
+        const idx = headerRow.findIndex(h => CENTER_COLUMN_ALIASES[field].includes(h));
+        if(idx !== -1) headerMap[field] = idx;
+      });
+      if(headerMap.name === undefined){ alert("Impossible de trouver une colonne 'Nom' dans le fichier."); return; }
+      let maxOrder = centers.reduce((m,c)=>Math.max(m,c.order),0);
+      let added = 0;
+      for(let i=1;i<rows.length;i++){
+        const row = rows[i];
+        if(!row || row.every(v => v===undefined || v===null || v==="")) continue;
+        const mapped = mapImportedRow(headerMap, row);
+        if(!mapped.name) continue;
+        const type = STRUCT_TYPES.includes(mapped.type) ? mapped.type : "Publique";
+        const zoneVal = ROLE === 'zsmanager' && CURRENT_ZSMANAGER ? CURRENT_ZSMANAGER.zone : mapped.zone;
+        maxOrder++;
+        const c = {id: uid(), order:maxOrder, name:mapped.name, type, departement:mapped.departement, zone:zoneVal, commune:mapped.commune, date:""};
+        ensureAdminOverrides(c); ensureAdminSources(c);
+        centers.push(c);
+        added++;
+      }
+      saveCenters(centers);
+      renderAdmin(); refreshFsSelect(); renderAllTools(); renderTracking(); renderAggregates(); renderOverrides(); renderAdminSrc(); renderUsers();
+      alert(`${added} centre(s) importé(s).`);
+    }catch(err){
+      alert("Impossible de lire ce fichier : " + err.message);
+    }
+  };
+  reader.readAsArrayBuffer(file);
+  e.target.value = "";
+});
+
+document.getElementById('btnChangePass').addEventListener('click', () => {
+  const current = window.prompt("Mot de passe actuel :");
+  if(current === null) return;
+  if(current !== getAdminPass()){ alert("Mot de passe actuel incorrect."); return; }
+  const next = window.prompt("Nouveau mot de passe :");
+  if(!next) return;
+  const confirmNext = window.prompt("Confirmez le nouveau mot de passe :");
+  if(next !== confirmNext){ alert("Les deux saisies ne correspondent pas."); return; }
+  localStorage.setItem(LS_ADMIN_PASS, next);
+  alert("Mot de passe administrateur mis à jour.");
+});
+
+/* --- Gestionnaires de Zone Sanitaire (admin uniquement) --- */
+const zsManagersBody = document.getElementById('zsManagersBody');
+function renderZsManagers(){
+  if(ROLE !== 'admin') return;
+  zsManagersBody.innerHTML = "";
+  zsManagers.forEach(z => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><input type="text" value="${escapeAttr(z.zone)}" data-zfield="zone" placeholder="Nom exact de la zone sanitaire"></td>
+      <td><input type="text" value="${escapeAttr(z.username)}" data-zfield="username"></td>
+      <td><input type="text" value="${escapeAttr(z.password)}" data-zfield="password"></td>
+      <td class="center"><button class="icon-btn" title="Supprimer">✕</button></td>
+    `;
+    tr.querySelectorAll('input').forEach(inp => {
+      inp.addEventListener('input', () => { z[inp.dataset.zfield] = inp.value; saveZsManagers(zsManagers); });
+    });
+    tr.querySelector('.icon-btn').addEventListener('click', () => {
+      if(!confirm(`Supprimer le compte gestionnaire de "${z.zone}" ?`)) return;
+      zsManagers = zsManagers.filter(x=>x.id!==z.id);
+      saveZsManagers(zsManagers);
+      renderZsManagers();
+    });
+    zsManagersBody.appendChild(tr);
+  });
+}
+document.getElementById('btnAddZsManager').addEventListener('click', () => {
+  const n = zsManagers.length + 1;
+  const z = { id: uidZ(), zone: `Zone ${n}`, username: `zone${n}`, password: Math.random().toString(36).slice(2,8) };
+  zsManagers.push(z); saveZsManagers(zsManagers);
+  renderZsManagers();
+});
+
+/* --- Comptes utilisateurs (équipes) --- */
+const usersBody = document.getElementById('usersBody');
+function renderUsers(){
+  if(!hasAdminAccess()) return;
+  usersBody.innerHTML = "";
+  const scopedCenters = visibleCenters();
+  const scopedUsers = visibleUsers();
+  scopedUsers.forEach(u => {
+    const tr = document.createElement('tr');
+    tr.className = "user-row";
+    const checkboxes = scopedCenters.map(c => `<label><input type="checkbox" data-ucheck="${u.id}" value="${c.id}" ${((u.centerIds||[]).includes(c.id))?'checked':''}> ${c.order}. ${escapeHtml(c.name)}</label>`).join('');
+    tr.innerHTML = `
+      <td><input type="text" value="${escapeAttr(u.teamName)}" data-ufield="teamName"></td>
+      <td><input type="text" value="${escapeAttr(u.username)}" data-ufield="username"></td>
+      <td><input type="text" value="${escapeAttr(u.password)}" data-ufield="password"></td>
+      <td><div class="checkbox-list">${checkboxes || '<em style="color:var(--muted);font-size:11px;">Aucun centre disponible</em>'}</div></td>
+      <td class="center"><button class="icon-btn" title="Supprimer">✕</button></td>
+    `;
+    tr.querySelectorAll('input[data-ufield]').forEach(inp => {
+      inp.addEventListener('input', () => { u[inp.dataset.ufield] = inp.value; saveUsers(users); });
+    });
+    tr.querySelectorAll('input[data-ucheck]').forEach(chk => {
+      chk.addEventListener('change', () => {
+        const set = new Set(u.centerIds || []);
+        if(chk.checked) set.add(chk.value); else set.delete(chk.value);
+        u.centerIds = Array.from(set);
+        saveUsers(users);
+      });
+    });
+    tr.querySelector('.icon-btn').addEventListener('click', () => {
+      if(!confirm(`Supprimer le compte de l'équipe "${u.teamName}" ?`)) return;
+      users = users.filter(x=>x.id!==u.id);
+      saveUsers(users);
+      renderUsers();
+    });
+    usersBody.appendChild(tr);
+  });
+}
+document.getElementById('btnAddUser').addEventListener('click', () => {
+  const n = users.length + 1;
+  const createdByZone = ROLE === 'zsmanager' && CURRENT_ZSMANAGER ? CURRENT_ZSMANAGER.zone : null;
+  const u = { id: uidU(), teamName: `Équipe ${n}`, username: `equipe${n}`, password: Math.random().toString(36).slice(2,8), centerIds: [], createdByZone };
+  users.push(u); saveUsers(users);
+  renderUsers();
+});
+
+/* --- Suivi / synchronisation des soumissions --- */
+const trackingBody = document.getElementById('trackingBody');
+function renderTracking(){
+  if(!hasAdminAccess()) return;
+  trackingBody.innerHTML = "";
+  visibleCenters().forEach(c => {
+    const d = loadFsData(c.id);
+    const total = totalScore(c, effInputs(c, d));
+    const denom = totalPlafond(c);
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td class="center">${c.order}</td>
+      <td>${escapeHtml(c.name)}</td>
+      <td>${c.type}</td>
+      <td>${escapeHtml(c.commune||'—')}</td>
+      <td>${escapeHtml(c.zone||'—')}</td>
+      <td class="center">${denom? fmtPct(pct(total,denom)) : "—"} (${total}/${denom})</td>
+      <td class="center"><span class="badge ${d.locked?'locked':'moyenne'}">${d.locked?'Verrouillée':'En cours'}</span></td>
+      <td class="center"><span class="badge ${d.sent?'sent':'notsent'}">${d.sent ? ('Reçues le '+ (d.sentAt? new Date(d.sentAt).toLocaleDateString('fr-FR') : '')) : 'Non reçues'}</span></td>
+    `;
+    trackingBody.appendChild(tr);
+  });
+}
+document.getElementById('fileImportSubmissions').addEventListener('change', (e) => {
+  const files = Array.from(e.target.files || []);
+  if(!files.length) return;
+  let done = 0, ok = 0;
+  files.forEach(file => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      done++;
+      try{
+        const payload = JSON.parse(reader.result);
+        if(payload.centerId && payload.data){
+          saveFsData(payload.centerId, payload.data);
+          if(!centers.some(cc => cc.id === payload.centerId)){
+            const stub = {id:payload.centerId, order:centers.length+1, name:payload.centerName||payload.centerId,
+              type:payload.centerType||"Publique", departement:"", zone:(ROLE==='zsmanager'&&CURRENT_ZSMANAGER?CURRENT_ZSMANAGER.zone:""), commune:"", date:""};
+            ensureAdminOverrides(stub); ensureAdminSources(stub);
+            centers.push(stub);
+            saveCenters(centers);
+          }
+          ok++;
+        }
+      }catch(err){ /* fichier ignoré */ }
+      if(done === files.length){
+        renderAdmin(); refreshFsSelect(); renderAllTools(); renderTracking(); renderAggregates(); renderOverrides(); renderAdminSrc();
+        alert(`${ok} soumission(s) importée(s) sur ${files.length} fichier(s).`);
+      }
+    };
+    reader.readAsText(file);
+  });
+  e.target.value = "";
+});
+
+/* --- Agrégations par Commune / Zone sanitaire --- */
+const communeBody = document.getElementById('communeBody');
+const zsBody = document.getElementById('zsBody');
+function renderAggregates(){
+  if(!hasAdminAccess()) return;
+  const scoped = visibleCenters();
+  function groupBy(field){
+    const groups = {};
+    scoped.forEach(c => {
+      const key = (c[field] || '').trim() || 'Non renseigné';
+      if(!groups[key]) groups[key] = [];
+      groups[key].push(c);
+    });
+    return groups;
+  }
+  function renderGroup(tbody, field){
+    const groups = groupBy(field);
+    tbody.innerHTML = "";
+    Object.keys(groups).sort().forEach(key => {
+      const list = groups[key];
+      let sumFrac = 0, nSent = 0;
+      list.forEach(c => {
+        const d = loadFsData(c.id);
+        const total = totalScore(c, effInputs(c, d));
+        const denom = totalPlafond(c);
+        sumFrac += pct(total, denom);
+        if(d.sent) nSent++;
+      });
+      const avg = list.length ? sumFrac / list.length : 0;
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${escapeHtml(key)}</td><td class="center">${list.length}</td><td class="center">${fmtPct(avg)}</td><td class="center">${nSent}/${list.length}</td>`;
+      tbody.appendChild(tr);
+    });
+  }
+  renderGroup(communeBody, 'commune');
+  renderGroup(zsBody, 'zone');
+}
+
+/* --- Données centralisées par l'administrateur (Id 12, 19, 20) --- */
+const overridesBody = document.getElementById('overridesBody');
+function renderOverrides(){
+  if(!hasAdminAccess()) return;
+  overridesBody.innerHTML = "";
+  visibleCenters().forEach(c => {
+    ensureAdminOverrides(c);
+    const tr = document.createElement('tr');
+    let cells = `<td>${c.order}. ${escapeHtml(c.name)}</td>`;
+    ADMIN_CONTROLLED_IDS.forEach(id => {
+      const ov = c.adminOverrides[id];
+      cells += `<td class="input-cell"><input type="number" min="0" value="${ov.n}" data-ov-center="${c.id}" data-ov-id="${id}" data-ov-field="n"></td>`;
+      cells += `<td class="input-cell"><input type="number" min="0" value="${ov.d}" data-ov-center="${c.id}" data-ov-id="${id}" data-ov-field="d"></td>`;
+    });
+    tr.innerHTML = cells;
+    overridesBody.appendChild(tr);
+  });
+  overridesBody.querySelectorAll('input').forEach(inp => {
+    inp.addEventListener('input', () => {
+      const c = centers.find(x => x.id === inp.dataset.ovCenter);
+      if(!c) return;
+      ensureAdminOverrides(c);
+      c.adminOverrides[inp.dataset.ovId][inp.dataset.ovField] = inp.value === "" ? 0 : parseFloat(inp.value);
+      c.overridesTouched[inp.dataset.ovId] = true;
+      saveCenters(centers);
+      renderTracking(); renderAggregates();
+      if(currentCenterId === c.id) renderAllTools();
+    });
+  });
+}
+
+/* --- Outil 3 : sources centralisées par l'administrateur (Rapport CSE, Base SIMR, DHIS2) --- */
+const adminSrcBody = document.getElementById('adminSrcBody');
+const ADMIN_SRC_FIELDS = ['simr','dcm','dcn','d5'];
+function renderAdminSrc(){
+  if(!hasAdminAccess()) return;
+  adminSrcBody.innerHTML = "";
+  visibleCenters().forEach(c => {
+    ensureAdminSources(c);
+    const tr = document.createElement('tr');
+    let cells = `<td>${c.order}. ${escapeHtml(c.name)}</td>`;
+    ADMIN_CONTROLLED_SRC_IDX.forEach(idx => {
+      ADMIN_SRC_FIELDS.forEach(f => {
+        cells += `<td class="input-cell"><input type="number" min="0" value="${c.adminSources[idx][f]}" data-as-center="${c.id}" data-as-idx="${idx}" data-as-field="${f}"></td>`;
+      });
+    });
+    tr.innerHTML = cells;
+    adminSrcBody.appendChild(tr);
+  });
+  adminSrcBody.querySelectorAll('input').forEach(inp => {
+    inp.addEventListener('input', () => {
+      const c = centers.find(x => x.id === inp.dataset.asCenter);
+      if(!c) return;
+      ensureAdminSources(c);
+      c.adminSources[inp.dataset.asIdx][inp.dataset.asField] = inp.value === "" ? 0 : parseFloat(inp.value);
+      c.adminSourcesTouched[inp.dataset.asIdx] = true;
+      saveCenters(centers);
+      renderTracking(); renderAggregates();
+      if(currentCenterId === c.id) renderAllTools();
+    });
+  });
+}
+
+/* =========================================================================
+   SÉLECTEUR DE FS
+   ========================================================================= */
+const fsSelect = document.getElementById('fsSelect');
+const fsToolbarWrap = document.getElementById('fsToolbarWrap');
+const fsMeta = document.getElementById('fsMeta');
+const lockBadgeWrap = document.getElementById('lockBadgeWrap');
+
+function refreshFsSelect(){
+  const vc = visibleCenters();
+  fsSelect.innerHTML = vc.map(c => `<option value="${c.id}">${c.order}. ${escapeHtml(c.name)}</option>`).join('');
+  document.getElementById('noAssignedCenters').style.display = (ROLE==='user' && vc.length===0) ? "" : "none";
+  if(currentCenterId && vc.some(c=>c.id===currentCenterId)){
+    fsSelect.value = currentCenterId;
+  } else if(vc.length){
+    currentCenterId = vc[0].id;
+    fsSelect.value = currentCenterId;
+    currentFsData = loadFsData(currentCenterId);
+  } else {
+    currentCenterId = null;
+    currentFsData = defaultFsData();
+  }
+  const activeTab = document.querySelector('nav.tabs button.active')?.dataset.tab;
+  fsToolbarWrap.style.display = (vc.length && activeTab !== 'admin') ? "" : "none";
+  updateFsMeta();
+  updateLockUi();
+}
+function updateFsMeta(){
+  const c = currentCenter();
+  if(!c){ fsMeta.textContent = ""; return; }
+  const parts = [c.departement, c.zone, c.commune, c.date].filter(Boolean);
+  fsMeta.innerHTML = `<span class="type-pill">${c.type||"Publique"}</span> ${parts.length ? "· " + escapeHtml(parts.join(" · ")) : "· Compléter l'identification dans l'onglet Administration"}`;
+}
+function updateLockUi(){
+  lockBadgeWrap.innerHTML = currentFsData.locked ? `<span class="badge locked">🔒 Verrouillée</span>` : "";
+  document.querySelectorAll('nav.tabs button').forEach(btn => {
+    const restricted = ['outil1','outil3','outil2','graphiques'].includes(btn.dataset.tab);
+    btn.classList.toggle('locked-tab', restricted && currentFsData.locked);
+  });
+}
+
+fsSelect.addEventListener('change', () => {
+  flushSaves(); // sauvegarde le brouillon de la FS précédente avant de changer de centre
+  currentCenterId = fsSelect.value;
+  currentFsData = loadFsData(currentCenterId);
+  updateFsMeta();
+  updateLockUi();
+  renderAllTools();
+});
+
+/* =========================================================================
+   BANDEAU PERFORMANCE
+   ========================================================================= */
+const perfBanner = document.getElementById('perfBanner');
+function renderPerfBanner(){
+  const center = currentCenter();
+  if(!center){ perfBanner.innerHTML = ""; return; }
+  const domainScores = computeDomainScores(center, effInputs(center, currentFsData));
+  const total = totalScore(center, effInputs(center, currentFsData));
+  const denom = totalPlafond(center);
+  const frac = pct(total, denom);
+  const badge = performanceBadge(frac);
+  let html = `<div class="perf-box big"><div class="val">${total} / ${denom}</div><div class="lbl">Performance globale FS</div>
+    <span class="badge ${badge.cls}">${badge.label}</span></div>`;
+  DOMAINS.forEach(d => {
+    const ds = domainScores[d.key];
+    if(ds.na){ html += `<div class="perf-box na"><div class="val">N/A</div><div class="lbl">${d.label}</div></div>`; }
+    else { html += `<div class="perf-box"><div class="val">${fmtPct(pct(ds.score, ds.plafond))}</div><div class="lbl">${d.label}</div></div>`; }
+  });
+  perfBanner.innerHTML = html;
+}
+
+/* =========================================================================
+   RENDU — OUTIL 1
+   ========================================================================= */
+const outil1Body = document.getElementById('outil1Body');
+function renderOutil1(){
+  const center = currentCenter();
+  const has = !!center;
+  document.getElementById('outil1NoFs').style.display = has ? "none" : "";
+  document.getElementById('outil1Locked').style.display = (has && currentFsData.locked) ? "" : "none";
+  document.getElementById('outil1Content').style.display = (has && !currentFsData.locked) ? "" : "none";
+  if(!has || currentFsData.locked) return;
+
+  const naIds = NA_INDICATORS_BY_TYPE[center.type] || [];
+  const warn = document.getElementById('naWarning');
+  if(naIds.length){
+    warn.style.display = "";
+    warn.textContent = `Les indicateurs suivants sont marqués « Non applicable » pour cette FS (type : ${center.type}) : ` +
+      naIds.map(i=>'Id '+i).join(', ') + ". Modifiable dans l'onglet Administration.";
+  } else { warn.style.display = "none"; }
+
+  outil1Body.innerHTML = "";
+  const domainScores = computeDomainScores(center, effInputs(center, currentFsData));
+  DOMAINS.forEach(d => {
+    const ds = domainScores[d.key];
+    const trH = document.createElement('tr');
+    trH.className = "domain-row" + (ds.na ? " na-row" : "");
+    trH.innerHTML = `<td></td><td>${d.label}${ds.na?' <em>(non applicable)</em>':''}</td><td class="center"></td><td class="center"></td><td class="center"></td>
+      <td class="center"></td><td class="center">${ds.na?'—':ds.plafond}</td>
+      <td class="center" data-domain-score="${d.key}">${ds.na?'N/A':ds.score}</td><td></td>`;
+    outil1Body.appendChild(trH);
+
+    INDICATORS.filter(i => i.domain === d.key).forEach(ind => {
+      const na = !indicatorApplicable(center, ind);
+      const adminCtrl = ADMIN_CONTROLLED_IDS.includes(ind.id);
+      const tr = document.createElement('tr');
+      if(na) tr.className = "na-row";
+      else if(adminCtrl) tr.className = "admin-ctrl-row";
+      const inp = adminCtrl ? (center.adminOverrides && center.adminOverrides[ind.id] || {n:0,d:0}) : currentFsData.inputs[ind.id];
+      const sc = na ? null : scoreFor(ind, inp);
+
+      let ndHtml;
+      if(adminCtrl){
+        ndHtml = `<td class="center" style="background:#eef0f0;color:#5b6b74;">${inp.n} <span title="Défini par l'administrateur">🔒</span></td>
+                   <td class="center" style="background:#eef0f0;color:#5b6b74;">${inp.d}</td>`;
+      } else if(ind.rule === "oui2"){
+        ndHtml = `<td colspan="2"><select data-ind="${ind.id}" data-field="b" ${na?'disabled':''} title="${escapeAttr(ind.explain||'')}">
+          <option value="Non" ${inp.b==="Non"?"selected":""}>Non</option>
+          <option value="Oui" ${inp.b==="Oui"?"selected":""}>Oui</option>
+        </select></td>`;
+      } else {
+        ndHtml = `<td class="input-cell"><input type="number" min="0" step="1" value="${inp.n}" data-ind="${ind.id}" data-field="n" ${na?'disabled':''} title="${escapeAttr(ind.nLabel||'Numérateur')}"></td>
+                   <td class="input-cell"><input type="number" min="0" step="1" value="${inp.d}" data-ind="${ind.id}" data-field="d" ${na?'disabled':''} title="${escapeAttr(ind.dLabel||'Dénominateur')}"></td>`;
+      }
+
+      tr.innerHTML = `
+        <td class="center">Id ${ind.id}</td>
+        <td>${ind.label}${adminCtrl?' <em style="color:var(--muted);font-size:11px;">(donnée centralisée par l\'administrateur)</em>':''}</td>
+        ${ndHtml}
+        <td class="center">${ind.cible}</td>
+        <td class="center" data-valeur-cell="${ind.id}">${na?'N/A':valeurAtteinteDisplay(ind, inp)}</td>
+        <td class="center">${ind.plafond}</td>
+        <td class="calc-cell" data-score-cell="${ind.id}">${na?'N/A':sc}</td>
+        <td class="explain-cell">${ind.explain}</td>
+      `;
+      outil1Body.appendChild(tr);
+    });
+  });
+
+  const total = totalScore(center, effInputs(center, currentFsData));
+  const denom = totalPlafond(center);
+  const totalRow = document.createElement('tr');
+  totalRow.className = "total-row";
+  totalRow.innerHTML = `<td></td><td>TOTAL GÉNÉRAL (indicateurs applicables uniquement)</td><td></td><td></td><td></td><td></td>
+    <td class="center">${denom}</td><td class="center" data-total-score>${total}</td><td></td>`;
+  outil1Body.appendChild(totalRow);
+
+  outil1Body.querySelectorAll('[data-ind]').forEach(el => {
+    el.addEventListener('input', onIndicatorChange);
+    el.addEventListener('change', onIndicatorChange);
+  });
+}
+
+function onIndicatorChange(e){
+  const id = e.target.dataset.ind;
+  const field = e.target.dataset.field;
+  const ind = INDICATORS.find(i => i.id == id);
+  const value = e.target.tagName === 'SELECT' ? e.target.value : (e.target.value === "" ? 0 : parseFloat(e.target.value));
+  currentFsData.inputs[id][field] = value;
+  currentFsData.touched[id] = true;
+  markFsDirty();
+  renderPerfBanner();
+  renderOutil1SoftUpdate(ind);
+  renderOutil2();
+  const activeTab = document.querySelector('nav.tabs button.active')?.dataset.tab;
+  if(activeTab === 'graphiques') renderCharts();
+}
+
+function renderOutil1SoftUpdate(changedInd){
+  const center = currentCenter();
+  const domainScores = computeDomainScores(center, effInputs(center, currentFsData));
+  DOMAINS.forEach(d => {
+    const cell = outil1Body.querySelector(`[data-domain-score="${d.key}"]`);
+    if(cell) cell.textContent = domainScores[d.key].na ? 'N/A' : domainScores[d.key].score;
+  });
+  const inp = currentFsData.inputs[changedInd.id];
+  const na = !indicatorApplicable(center, changedInd);
+  const scoreCell = outil1Body.querySelector(`[data-score-cell="${changedInd.id}"]`);
+  if(scoreCell) scoreCell.textContent = na ? 'N/A' : scoreFor(changedInd, inp);
+  const valCell = outil1Body.querySelector(`[data-valeur-cell="${changedInd.id}"]`);
+  if(valCell) valCell.textContent = na ? 'N/A' : valeurAtteinteDisplay(changedInd, inp);
+  const totalCell = outil1Body.querySelector('[data-total-score]');
+  if(totalCell) totalCell.textContent = totalScore(center, effInputs(center, currentFsData));
+}
+
+/* =========================================================================
+   RENDU — OUTIL 2
+   ========================================================================= */
+const outil2DomainBody = document.getElementById('outil2DomainBody');
+const outil2GridTable = document.getElementById('outil2GridTable');
+
+function renderOutil2(){
+  const center = currentCenter();
+  const has = !!center;
+  document.getElementById('outil2NoFs').style.display = has ? "none" : "";
+  document.getElementById('outil2Content').style.display = has ? "" : "none";
+  if(!has) return;
+
+  const domainScores = computeDomainScores(center, effInputs(center, currentFsData));
+  outil2DomainBody.innerHTML = "";
+  let sumN = 0;
+  DOMAINS.forEach(d => {
+    const ds = domainScores[d.key];
+    const tr = document.createElement('tr');
+    if(ds.na){
+      tr.className = "na-row";
+      tr.innerHTML = `<td>${d.label}</td><td class="center">N/A</td><td class="center">N/A</td><td class="center">—</td>`;
+    } else {
+      sumN += ds.score;
+      tr.innerHTML = `<td>${d.label}</td><td class="center calc-cell">${ds.score}</td><td class="center">${ds.plafond}</td><td class="center">${fmtPct(pct(ds.score,ds.plafond))}</td>`;
+    }
+    outil2DomainBody.appendChild(tr);
+  });
+  const denom = totalPlafond(center);
+  const trTotal = document.createElement('tr');
+  trTotal.className = "total-row";
+  trTotal.innerHTML = `<td>Performance globale FS</td><td class="center">${sumN}</td><td class="center">${denom}</td><td class="center">${fmtPct(pct(sumN,denom))}</td>`;
+  outil2DomainBody.appendChild(trTotal);
+
+  let html = "";
+  const ids = INDICATORS.map(i=>i.id);
+  for(let start=0; start<ids.length; start+=11){
+    const group = ids.slice(start, start+11);
+    html += `<tr><th>N° Indicateur</th>${group.map(id=>`<th class="center">Id ${id}</th>`).join('')}</tr>`;
+    html += `<tr><td><strong>Score obtenu</strong></td>${group.map(id=>{
+      const ind = INDICATORS.find(i=>i.id===id);
+      const na = !indicatorApplicable(center, ind);
+      return `<td class="center calc-cell">${na?'N/A':scoreFor(ind, effInputs(center, currentFsData)[id])}</td>`;
+    }).join('')}</tr>`;
+    html += `<tr><td><strong>Score plafond</strong></td>${group.map(id=>{
+      const ind = INDICATORS.find(i=>i.id===id);
+      const na = !indicatorApplicable(center, ind);
+      return `<td class="center">${na?'—':ind.plafond}</td>`;
+    }).join('')}</tr>`;
+  }
+  outil2GridTable.innerHTML = html;
+}
+
+/* =========================================================================
+   RENDU — OUTIL 3
+   ========================================================================= */
+const outil3SourceBody = document.getElementById('outil3SourceBody');
+const outil3DiscordBody = document.getElementById('outil3DiscordBody');
+
+function sourceTotal(row){ return (row.simr||0)+(row.dcm||0)+(row.dcn||0)+(row.d5||0); }
+function discordance(a,b){ const denom = Math.max(a,b); if(!denom) return null; return Math.abs(a-b)/denom; }
+
+function renderOutil3(){
+  const has = !!currentCenterId;
+  document.getElementById('outil3NoFs').style.display = has ? "none" : "";
+  document.getElementById('outil3Locked').style.display = (has && currentFsData.locked) ? "" : "none";
+  document.getElementById('outil3Content').style.display = (has && !currentFsData.locked) ? "" : "none";
+  if(!has || currentFsData.locked) return;
+  const center = currentCenter();
+  ensureAdminSources(center);
+
+  outil3SourceBody.innerHTML = "";
+  EXACT_SOURCES.forEach((label, idx) => {
+    const adminCtrl = ADMIN_CONTROLLED_SRC_IDX.includes(idx);
+    const row = adminCtrl ? center.adminSources[idx] : currentFsData.sources[idx];
+    const tr = document.createElement('tr');
+    if(adminCtrl) tr.className = "na-row";
+    const adminNote = adminCtrl ? " 🔒 (donnée centralisée admin)" : "";
+    const cellsHtml = ["simr","dcm","dcn","d5"].map(f =>
+      `<td class="input-cell"><input type="number" min="0" value="${row[f]}" data-src="${idx}" data-field="${f}" ${adminCtrl?'disabled':''}></td>`
+    ).join('');
+    tr.innerHTML = `<td>${label}${adminNote}</td>${cellsHtml}<td class="center calc-cell" data-src-total="${idx}">${sourceTotal(row)}</td>`;
+    outil3SourceBody.appendChild(tr);
+  });
+
+  outil3SourceBody.querySelectorAll('input:not([disabled])').forEach(inp => {
+    inp.addEventListener('input', () => {
+      const idx = parseInt(inp.dataset.src);
+      const field = inp.dataset.field;
+      currentFsData.sources[idx][field] = inp.value === "" ? 0 : parseFloat(inp.value);
+      currentFsData.touchedSrc[idx+'_'+field] = true;
+      markFsDirty();
+      renderOutil3SoftUpdate();
+      const activeTab = document.querySelector('nav.tabs button.active')?.dataset.tab;
+      if(activeTab === 'graphiques') renderCharts();
+    });
+  });
+
+  renderOutil3Discord();
+}
+function renderOutil3SoftUpdate(){
+  const center = currentCenter();
+  const eff = effSources(center, currentFsData);
+  EXACT_SOURCES.forEach((_, idx) => {
+    const cell = outil3SourceBody.querySelector(`[data-src-total="${idx}"]`);
+    if(cell) cell.textContent = sourceTotal(eff[idx]);
+  });
+  renderOutil3Discord();
+}
+function renderOutil3Discord(){
+  const center = currentCenter();
+  const eff = effSources(center, currentFsData);
+  outil3DiscordBody.innerHTML = "";
+  EXACT_DISCORD.forEach(d => {
+    const rowA = eff[d.a];
+    const rowB = eff[d.b];
+    const cols = ["simr","dcm","dcn","d5"];
+    const cellsHtml = cols.map(c => {
+      const disc = discordance(rowA[c]||0, rowB[c]||0);
+      return `<td class="center">${disc===null ? "—" : fmtPct(disc)}</td>`;
+    }).join('');
+    const totalDisc = discordance(sourceTotal(rowA), sourceTotal(rowB));
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${d.label}</td>${cellsHtml}<td class="center calc-cell">${totalDisc===null?"—":fmtPct(totalDisc)}</td>`;
+    outil3DiscordBody.appendChild(tr);
+  });
+}
+
+/* =========================================================================
+   GRAPHIQUES
+   ========================================================================= */
+let chartDomainsInst=null, chartExactitudeInst=null, chartCompareInst=null;
+
+function renderCharts(){
+  const has = !!currentCenterId;
+  document.getElementById('graphNoFs').style.display = has ? "none" : "";
+  document.getElementById('graphContent').style.display = has ? "" : "none";
+  if(!has) return;
+  const center = currentCenter();
+
+  const domainScores = computeDomainScores(center, effInputs(center, currentFsData));
+  const applicableDomains = DOMAINS.filter(d => !domainScores[d.key].na);
+  const ctx1 = document.getElementById('chartDomains').getContext('2d');
+  const data1 = {
+    labels: applicableDomains.map(d => d.label.length>28? d.label.slice(0,26)+'…' : d.label),
+    datasets: [{ label:'% de performance', data: applicableDomains.map(d => Math.round(pct(domainScores[d.key].score, domainScores[d.key].plafond)*100)),
+      backgroundColor: '#1b8a7a', borderRadius:4 }]
+  };
+  if(chartDomainsInst) chartDomainsInst.destroy();
+  chartDomainsInst = new Chart(ctx1, { type:'bar', data:data1,
+    options:{ indexAxis:'y', responsive:true, scales:{ x:{ min:0, max:100, ticks:{callback:v=>v+'%'} } },
+      plugins:{ legend:{display:false}, tooltip:{callbacks:{label:c=>c.parsed.x+'%'}} } } });
+
+  const ctx2 = document.getElementById('chartExactitude').getContext('2d');
+  const effSrc = effSources(center, currentFsData);
+  const discVals = EXACT_DISCORD.map(d => {
+    const rowA = effSrc[d.a], rowB = effSrc[d.b];
+    const v = discordance(sourceTotal(rowA), sourceTotal(rowB));
+    return v===null ? 0 : Math.round(v*100);
+  });
+  const data2 = { labels: EXACT_DISCORD.map(d => d.label.replace('Discordance ','').slice(0,30)),
+    datasets: [{ label:'Discordance (%)', data: discVals, backgroundColor:'#c0392b', borderRadius:4 }] };
+  if(chartExactitudeInst) chartExactitudeInst.destroy();
+  chartExactitudeInst = new Chart(ctx2, { type:'bar', data:data2,
+    options:{ responsive:true, scales:{ y:{ min:0, max:100, ticks:{callback:v=>v+'%'} } },
+      plugins:{ legend:{display:false}, tooltip:{callbacks:{label:c=>c.parsed.y+'%'}} } } });
+
+  const sorted = visibleCenters();
+  const compareLabels = sorted.map(c => c.name);
+  const compareData = sorted.map(c => {
+    const d = loadFsData(c.id);
+    const total = totalScore(c, effInputs(c, d));
+    const denom = totalPlafond(c);
+    return Math.round(pct(total, denom)*100);
+  });
+  const ctx3 = document.getElementById('chartCompare').getContext('2d');
+  if(chartCompareInst) chartCompareInst.destroy();
+  chartCompareInst = new Chart(ctx3, { type:'bar',
+    data:{ labels: compareLabels, datasets:[{ label:'Performance globale (%)', data: compareData,
+      backgroundColor: sorted.map(c => c.id===currentCenterId ? '#1f4e78' : '#9fc6d8'), borderRadius:4 }] },
+    options:{ responsive:true, scales:{ y:{ min:0, max:100, ticks:{callback:v=>v+'%'} } },
+      plugins:{ legend:{display:false}, tooltip:{callbacks:{label:c=>c.parsed.y+'%'}} } } });
+}
+
+/* =========================================================================
+   PRIORISATION
+   ========================================================================= */
+const prioBody = document.getElementById('prioBody');
+const synthesisWrap = document.getElementById('synthesisWrap');
+
+function renderPriorisation(){
+  const center = currentCenter();
+  const has = !!center;
+  document.getElementById('prioNoFs').style.display = has ? "none" : "";
+  document.getElementById('prioContent').style.display = has ? "" : "none";
+  document.getElementById('prioLockWarning').style.display = (has && currentFsData.locked && !currentFsData.sent) ? "" : "none";
+  if(!has) return;
+
+  prioBody.innerHTML = "";
+  const effInp = effInputs(center, currentFsData);
+  INDICATORS.forEach(ind => {
+    if(!indicatorApplicable(center, ind)) return;
+    const inp = effInp[ind.id];
+    const frac = pctAtteintFor(ind, inp);
+    const sc = scoreFor(ind, inp);
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td class="center">Id ${ind.id}</td><td>${ind.label}</td>
+      <td class="center">${sc} / ${ind.plafond}</td><td class="center">${fmtPct(frac)}</td>
+      <td class="${ragClass(frac)}">${ragLabel(frac)}</td>`;
+    prioBody.appendChild(tr);
+  });
+
+  synthesisWrap.innerHTML = "";
+  DOMAINS.forEach(d => {
+    if(domainFullyNA(center, d.key)) return;
+    const block = document.createElement('div');
+    block.className = "domain-block";
+    const s = currentFsData.synth[d.key];
+    block.innerHTML = `
+      <div class="dh">${d.label}</div>
+      <div class="synth-grid">
+        <div class="synth-col"><h4>Points forts</h4>${[0,1,2,3,4].map(i=>`<input type="text" data-domain="${d.key}" data-cat="forts" data-idx="${i}" value="${escapeAttr(s.forts[i])}" placeholder="${i+1}.">`).join('')}</div>
+        <div class="synth-col"><h4>Points à améliorer</h4>${[0,1,2,3,4].map(i=>`<input type="text" data-domain="${d.key}" data-cat="ameliorer" data-idx="${i}" value="${escapeAttr(s.ameliorer[i])}" placeholder="${i+1}.">`).join('')}</div>
+        <div class="synth-col"><h4>Recommandations</h4>${[0,1,2,3,4].map(i=>`<input type="text" data-domain="${d.key}" data-cat="reco" data-idx="${i}" value="${escapeAttr(s.reco[i])}" placeholder="${i+1}.">`).join('')}</div>
+      </div>`;
+    synthesisWrap.appendChild(block);
+  });
+  synthesisWrap.querySelectorAll('input').forEach(inp => {
+    inp.addEventListener('input', () => {
+      const {domain, cat, idx} = inp.dataset;
+      currentFsData.synth[domain][cat][idx] = inp.value;
+      markFsDirty();
+    });
+  });
+}
+
+// Vérifie que tous les champs obligatoires (Outil 1 + Outil 3) ont été renseignés
+// (par l'équipe ou par l'administrateur selon le champ) avant d'autoriser la Priorisation.
+function collectionMissingFields(center, fsData){
+  const missing = [];
+  INDICATORS.forEach(ind => {
+    if(!indicatorApplicable(center, ind)) return;
+    if(ADMIN_CONTROLLED_IDS.includes(ind.id)){
+      if(!(center.overridesTouched && center.overridesTouched[ind.id])) missing.push(`Id ${ind.id} (à renseigner par l'administrateur)`);
+      return;
+    }
+    if(!(fsData.touched && fsData.touched[ind.id])) missing.push(`Id ${ind.id} — ${ind.label}`);
+  });
+  [0,1].forEach(idx => {
+    ['simr','dcm','dcn','d5'].forEach(f => {
+      const key = idx+'_'+f;
+      if(!(fsData.touchedSrc && fsData.touchedSrc[key])) missing.push(`Outil 3 — ${EXACT_SOURCES[idx]}`);
+    });
+  });
+  ADMIN_CONTROLLED_SRC_IDX.forEach(idx => {
+    if(!(center.adminSourcesTouched && center.adminSourcesTouched[idx])) missing.push(`Outil 3 — ${EXACT_SOURCES[idx]} (à renseigner par l'administrateur)`);
+  });
+  // dédoublonne (les 4 champs d'une même source Outil 3 équipe génèrent le même libellé)
+  return Array.from(new Set(missing));
+}
+
+document.querySelector('nav.tabs button[data-tab="priorisation"]').addEventListener('click', (e) => {
+  const center = currentCenter();
+  if(!center) return;
+  if(!currentFsData.locked && !currentFsData.sent){
+    const missing = collectionMissingFields(center, currentFsData);
+    if(missing.length){
+      e.stopImmediatePropagation();
+      alert("Impossible d'accéder à la Priorisation : " + missing.length + " champ(s) obligatoire(s) non renseigné(s).\n\n" +
+        missing.slice(0,15).join('\n') + (missing.length > 15 ? `\n… et ${missing.length-15} de plus.` : ''));
+      return;
+    }
+    const ok = confirm("Une fois cette page ouverte, les Outils 1, 2, 3 et les Graphiques seront verrouillés pour cette FS "+
+      "(sauf déverrouillage par l'administrateur, ou après l'envoi final des données). Continuer ?");
+    if(!ok){ e.stopImmediatePropagation(); openTab('outil1'); return; }
+    currentFsData.locked = true;
+    saveFsData(currentCenterId, currentFsData);
+    updateLockUi();
+    renderTracking();
+  }
+}, true);
+
+/* =========================================================================
+   PLAN D'ACTION
+   ========================================================================= */
+const planBody = document.getElementById('planBody');
+function renderPlan(){
+  const center = currentCenter();
+  const has = !!center;
+  document.getElementById('planNoFs').style.display = has ? "none" : "";
+  document.getElementById('planContent').style.display = has ? "" : "none";
+  if(!has) return;
+
+  const applicableDomains = DOMAINS.filter(d => !domainFullyNA(center, d.key));
+  planBody.innerHTML = "";
+  currentFsData.plan.forEach((row, idx) => {
+    const tr = document.createElement('tr');
+    const domainOptions = `<option value="">—</option>` + applicableDomains.map(d=>`<option value="${d.key}" ${row.domain===d.key?'selected':''}>${d.label}</option>`).join('');
+    const indOptions = row.domain
+      ? `<option value="">—</option>` + INDICATORS.filter(i=>i.domain===row.domain && indicatorApplicable(center,i)).map(i=>`<option value="${i.id}" ${row.indicateur==i.id?'selected':''}>Id ${i.id} — ${i.label.slice(0,40)}${i.label.length>40?'…':''}</option>`).join('')
+      : `<option value="">Choisir un domaine d'abord</option>`;
+    tr.innerHTML = `
+      <td><select data-plan-idx="${idx}" data-field="domain">${domainOptions}</select></td>
+      <td><select data-plan-idx="${idx}" data-field="indicateur">${indOptions}</select></td>
+      <td><input type="text" data-plan-idx="${idx}" data-field="ameliorer" value="${escapeAttr(row.ameliorer)}"></td>
+      <td><input type="text" data-plan-idx="${idx}" data-field="cause" value="${escapeAttr(row.cause)}"></td>
+      <td><input type="text" data-plan-idx="${idx}" data-field="activite" value="${escapeAttr(row.activite)}"></td>
+      <td><input type="text" data-plan-idx="${idx}" data-field="cout" value="${escapeAttr(row.cout)}" placeholder="FCFA"></td>
+      <td class="center"><button class="icon-btn" data-del-plan="${idx}">✕</button></td>
+    `;
+    planBody.appendChild(tr);
+  });
+
+  planBody.querySelectorAll('select,input').forEach(el => {
+    el.addEventListener(el.tagName === 'SELECT' ? 'change' : 'input', () => {
+      const idx = parseInt(el.dataset.planIdx);
+      const field = el.dataset.field;
+      currentFsData.plan[idx][field] = el.value;
+      if(field === 'domain') currentFsData.plan[idx].indicateur = "";
+      markFsDirty();
+      if(field === 'domain') renderPlan();
+    });
+  });
+  planBody.querySelectorAll('[data-del-plan]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const idx = parseInt(btn.dataset.delPlan);
+      currentFsData.plan.splice(idx,1);
+      saveFsData(currentCenterId, currentFsData);
+      renderPlan();
+    });
+  });
+}
+document.getElementById('btnAddPlanRow').addEventListener('click', () => {
+  currentFsData.plan.push({domain:"", indicateur:"", ameliorer:"", cause:"", activite:"", cout:""});
+  saveFsData(currentCenterId, currentFsData);
+  renderPlan();
+});
+
+/* =========================================================================
+   PHOTOS & ÉVALUATEURS
+   ========================================================================= */
+const photoGrid = document.getElementById('photoGrid');
+const evaluateurGrid = document.getElementById('evaluateurGrid');
+const sendStatusBadge = document.getElementById('sendStatusBadge');
+
+function resizeImage(file, maxWidth, quality){
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        const scale = Math.min(1, maxWidth / img.width);
+        const canvas = document.createElement('canvas');
+        canvas.width = img.width * scale;
+        canvas.height = img.height * scale;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.onerror = reject;
+      img.src = reader.result;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+function renderPhotos(){
+  const has = !!currentCenterId;
+  document.getElementById('photosNoFs').style.display = has ? "none" : "";
+  document.getElementById('photosContent').style.display = has ? "" : "none";
+  if(!has) return;
+
+  photoGrid.innerHTML = "";
+  PHOTO_SLOTS.forEach(slot => {
+    const p = currentFsData.photos[slot.key];
+    const card = document.createElement('div');
+    card.className = "photo-card";
+    card.innerHTML = `
+      ${slot.editableTitle
+        ? `<input type="text" placeholder="Titre de la photo" value="${escapeAttr(p.title)}" data-photo="${slot.key}" data-field="title">`
+        : `<strong style="font-size:12.5px;color:var(--navy);">${slot.fixedTitle}</strong>`}
+      <div><input type="file" accept="image/*" data-photo="${slot.key}" data-field="file"></div>
+      <img data-photo-img="${slot.key}" src="${p.data||''}" style="display:${p.data?'block':'none'};">
+      ${p.data ? `<div style="margin-top:6px;"><button class="icon-btn" data-photo-clear="${slot.key}">✕ Supprimer</button></div>` : ''}
+    `;
+    photoGrid.appendChild(card);
+  });
+  photoGrid.querySelectorAll('input[type=text]').forEach(inp => {
+    inp.addEventListener('input', () => {
+      currentFsData.photos[inp.dataset.photo].title = inp.value;
+      markFsDirty();
+    });
+  });
+  photoGrid.querySelectorAll('input[type=file]').forEach(inp => {
+    inp.addEventListener('change', async () => {
+      const file = inp.files[0];
+      if(!file) return;
+      try{
+        const dataUrl = await resizeImage(file, 1000, 0.72);
+        currentFsData.photos[inp.dataset.photo].data = dataUrl;
+        saveFsData(currentCenterId, currentFsData);
+        renderPhotos();
+      }catch(err){ alert("Impossible de charger cette image."); }
+    });
+  });
+  photoGrid.querySelectorAll('[data-photo-clear]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      currentFsData.photos[btn.dataset.photoClear].data = "";
+      saveFsData(currentCenterId, currentFsData);
+      renderPhotos();
+    });
+  });
+
+  evaluateurGrid.innerHTML = "";
+  EVALUATEUR_ROLES.forEach(role => {
+    const ev = currentFsData.evaluateurs[role.key];
+    const card = document.createElement('div');
+    card.className = "eval-card";
+    card.innerHTML = `
+      <h4>${role.label}</h4>
+      <input type="text" placeholder="Nom et Prénom" value="${escapeAttr(ev.nom)}" data-eval="${role.key}" data-field="nom">
+      <input type="text" placeholder="Qualification" value="${escapeAttr(ev.qualif)}" data-eval="${role.key}" data-field="qualif">
+      <input type="text" placeholder="Contact" value="${escapeAttr(ev.contact)}" data-eval="${role.key}" data-field="contact">
+    `;
+    evaluateurGrid.appendChild(card);
+  });
+  evaluateurGrid.querySelectorAll('input').forEach(inp => {
+    inp.addEventListener('input', () => {
+      currentFsData.evaluateurs[inp.dataset.eval][inp.dataset.field] = inp.value;
+      markFsDirty();
+    });
+  });
+
+  sendStatusBadge.innerHTML = currentFsData.sent
+    ? `<span class="badge sent">Envoyé le ${new Date(currentFsData.sentAt).toLocaleString('fr-FR')} — pages de collecte déverrouillées pour consultation</span>`
+    : `<span class="badge notsent">Pas encore envoyé</span>`;
+}
+
+document.getElementById('btnSendData').addEventListener('click', () => {
+  const center = currentCenter();
+  if(!center){ alert("Aucune FS sélectionnée."); return; }
+  currentFsData.sent = true;
+  currentFsData.sentAt = new Date().toISOString();
+  currentFsData.locked = false; // l'envoi final déverrouille la relecture de toutes les pages
+  saveFsData(currentCenterId, currentFsData);
+  const payload = { centerId: currentCenterId, centerName: center.name, centerType: center.type, data: currentFsData, exportedAt: currentFsData.sentAt };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], {type:"application/json"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `Soumission_${(center.name||'FS').replace(/[^a-z0-9]+/gi,'_')}_${new Date().toISOString().slice(0,10)}.json`;
+  a.click(); URL.revokeObjectURL(url);
+  updateLockUi();
+  renderPhotos();
+  renderTracking();
+  alert("Fichier de soumission généré et pages déverrouillées pour relecture. Transmettez le fichier à l'administrateur.");
+});
+
+/* =========================================================================
+   NAVIGATION ONGLET
+   ========================================================================= */
+function openTab(tabName){
+  const btn = document.querySelector(`nav.tabs button[data-tab="${tabName}"]`);
+  if(btn) btn.click();
+}
+const tabButtons = document.querySelectorAll('nav.tabs button');
+tabButtons.forEach(btn => {
+  btn.addEventListener('click', () => {
+    if(btn.dataset.tab === 'admin' && !hasAdminAccess()) return;
+    if(['outil1','outil3','outil2','graphiques'].includes(btn.dataset.tab) && currentFsData.locked){
+      alert("Cette FS est verrouillée (page Priorisation déjà ouverte). Demandez à l'administrateur de la déverrouiller, ou envoyez les données finales pour déverrouiller automatiquement.");
+      return;
+    }
+    tabButtons.forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+    document.getElementById('panel-' + btn.dataset.tab).classList.add('active');
+    fsToolbarWrap.style.display = (btn.dataset.tab === 'admin' || visibleCenters().length===0) ? "none" : "";
+    if(btn.dataset.tab === 'admin'){ renderAdmin(); renderUsers(); renderTracking(); renderAggregates(); renderOverrides(); renderAdminSrc(); renderZsManagers(); }
+    if(btn.dataset.tab === 'graphiques') renderCharts();
+    if(btn.dataset.tab === 'priorisation') renderPriorisation();
+    if(btn.dataset.tab === 'plan') renderPlan();
+    if(btn.dataset.tab === 'photos') renderPhotos();
+  });
+});
+
+function unlockFsWithAdminPass(){
+  if(ROLE === 'admin'){
+    currentFsData.locked = false;
+    saveFsData(currentCenterId, currentFsData);
+    updateLockUi(); renderAllTools();
+    return;
+  }
+  const pass = window.prompt("Mot de passe administrateur pour déverrouiller cette FS :");
+  if(pass === null) return;
+  if(pass !== getAdminPass()){ alert("Mot de passe incorrect."); return; }
+  currentFsData.locked = false;
+  saveFsData(currentCenterId, currentFsData);
+  updateLockUi(); renderAllTools();
+  alert("FS déverrouillée.");
+}
+document.getElementById('btnUnlockFs1').addEventListener('click', unlockFsWithAdminPass);
+document.getElementById('btnUnlockFs2').addEventListener('click', unlockFsWithAdminPass);
+
+/* =========================================================================
+   EXPORT / IMPORT JSON (sauvegarde globale complète — admin)
+   ========================================================================= */
+document.getElementById('btnExportJson').addEventListener('click', () => {
+  const payload = { centers, users, zsManagers, data: {} };
+  centers.forEach(c => payload.data[c.id] = loadFsData(c.id));
+  const blob = new Blob([JSON.stringify(payload, null, 2)], {type:"application/json"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = "sauvegarde_collecte_FS_" + new Date().toISOString().slice(0,10) + ".json";
+  a.click(); URL.revokeObjectURL(url);
+});
+document.getElementById('btnImportJson').addEventListener('click', () => document.getElementById('fileImport').click());
+document.getElementById('fileImport').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try{
+      const payload = JSON.parse(reader.result);
+      if(!payload.centers) throw new Error("Format invalide");
+      centers = payload.centers;
+      centers.forEach(c => { ensureAdminOverrides(c); ensureAdminSources(c); });
+      saveCenters(centers);
+      if(payload.users){ users = payload.users; saveUsers(users); }
+      if(payload.zsManagers){ zsManagers = payload.zsManagers; saveZsManagers(zsManagers); }
+      Object.keys(payload.data||{}).forEach(cid => {
+        localStorage.setItem(LS_DATA_PREFIX + cid, JSON.stringify(payload.data[cid]));
+      });
+      const vc = visibleCenters();
+      currentCenterId = vc.length ? vc[0].id : null;
+      currentFsData = currentCenterId ? loadFsData(currentCenterId) : defaultFsData();
+      if(hasAdminAccess()){ renderAdmin(); renderUsers(); renderTracking(); renderAggregates(); renderOverrides(); renderAdminSrc(); renderZsManagers(); }
+      refreshFsSelect(); renderAllTools();
+      alert("Sauvegarde importée avec succès.");
+    }catch(err){
+      alert("Impossible de lire ce fichier de sauvegarde : " + err.message);
+    }
+  };
+  reader.readAsText(file);
+  e.target.value = "";
+});
+
+/* =========================================================================
+   EXPORT EXCEL
+   ========================================================================= */
+document.getElementById('btnExportExcel').addEventListener('click', () => {
+  const vc = visibleCenters();
+  if(vc.length === 0){ alert("Aucune FS visible à exporter."); return; }
+  const wb = XLSX.utils.book_new();
+
+  const adminRows = [["N°","Nom de la FS","Type de structure","Département","Zone sanitaire","Commune","Date d'évaluation"]];
+  vc.forEach(c => { adminRows.push([c.order, c.name, c.type, c.departement, c.zone, c.commune, c.date]); });
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(adminRows), "Admin");
+
+  vc.forEach(c => {
+    const data = loadFsData(c.id);
+    const effInp = effInputs(c, data);
+    const rows = [];
+    rows.push([`FICHE FS N°${c.order} — ${c.name} (${c.type})`]);
+    rows.push(["Département", c.departement, "Zone sanitaire", c.zone, "Commune", c.commune, "Date", c.date]);
+    rows.push([]);
+    rows.push(["OUTIL 1 (TDES-3) — Évaluation de la performance & pondération"]);
+    rows.push(["N°","Intitulé de l'indicateur","Numérateur","Dénominateur / Oui-Non","Cible","Valeur atteinte","Score plafond","Score obtenu","Explication sur la collecte et le calcul"]);
+    const domainScores = computeDomainScores(c, effInp);
+    DOMAINS.forEach(d => {
+      const ds = domainScores[d.key];
+      rows.push(["", d.label + (ds.na?" (Non applicable)":""), "", "", "", "", ds.na?"—":ds.plafond, ds.na?"N/A":ds.score, ""]);
+      INDICATORS.filter(i=>i.domain===d.key).forEach(ind => {
+        const inp = effInp[ind.id];
+        const na = !indicatorApplicable(c, ind);
+        const adminNote = ADMIN_CONTROLLED_IDS.includes(ind.id) ? " (donnée centralisée admin)" : "";
+        if(na){
+          rows.push([`Id ${ind.id}`, ind.label, "N/A", "N/A", ind.cible, "N/A", ind.plafond, "N/A", ind.explain]);
+        } else if(ind.rule === "oui2"){
+          rows.push([`Id ${ind.id}`, ind.label + adminNote, "", inp.b, ind.cible, inp.b, ind.plafond, scoreFor(ind,inp), ind.explain]);
+        } else {
+          rows.push([`Id ${ind.id}`, ind.label + adminNote, inp.n, inp.d, ind.cible, valeurAtteinteDisplay(ind,inp), ind.plafond, scoreFor(ind,inp), ind.explain]);
+        }
+      });
+    });
+    const total = totalScore(c, effInp);
+    const denom = totalPlafond(c);
+    rows.push(["","TOTAL GÉNÉRAL","","","","",denom,total,""]);
+    rows.push([]);
+    rows.push(["OUTIL 2 (TDES-1) — Agrégation par domaine"]);
+    rows.push(["Domaines","N (score obtenu)","D (score plafond)","% performance"]);
+    let sumN = 0;
+    DOMAINS.forEach(d => {
+      const ds = domainScores[d.key];
+      if(ds.na){ rows.push([d.label, "N/A", "N/A", "—"]); }
+      else { sumN += ds.score; rows.push([d.label, ds.score, ds.plafond, pct(ds.score,ds.plafond)]); }
+    });
+    rows.push(["Performance globale FS", sumN, denom, pct(sumN,denom)]);
+    rows.push([]);
+    rows.push(["OUTIL 3 (TDES-2) — Exactitude des données"]);
+    rows.push(["Sources de données","Nombre de cas SIMR","Nombre décès maternels","Nombre décès néonatals","Décès ≥ 5 ans","Total FS"]);
+    const effSrc = effSources(c, data);
+    EXACT_SOURCES.forEach((label, idx) => {
+      const r = effSrc[idx];
+      const note = ADMIN_CONTROLLED_SRC_IDX.includes(idx) ? " (donnée centralisée admin)" : "";
+      rows.push([label+note, r.simr, r.dcm, r.dcn, r.d5, sourceTotal(r)]);
+    });
+    rows.push([]);
+    rows.push(["Indicateur d'exactitude","Nombre de cas SIMR","Nombre décès maternels","Nombre décès néonatals","Décès ≥ 5 ans","Total FS"]);
+    EXACT_DISCORD.forEach(d => {
+      const rowA = effSrc[d.a], rowB = effSrc[d.b];
+      const cols = ["simr","dcm","dcn","d5"];
+      const vals = cols.map(c2 => { const v = discordance(rowA[c2]||0, rowB[c2]||0); return v===null?"":v; });
+      const totalDisc = discordance(sourceTotal(rowA), sourceTotal(rowB));
+      rows.push([d.label, ...vals, totalDisc===null?"":totalDisc]);
+    });
+    rows.push([]);
+    rows.push(["PRIORISATION — Statut par indicateur (Rouge <50% / Jaune 50-85% / Vert ≥85%)"]);
+    rows.push(["N°","Intitulé","Score","% atteint","Statut"]);
+    INDICATORS.filter(i=>indicatorApplicable(c,i)).forEach(ind => {
+      const inp = effInp[ind.id];
+      const frac = pctAtteintFor(ind, inp);
+      rows.push([`Id ${ind.id}`, ind.label, `${scoreFor(ind,inp)}/${ind.plafond}`, frac, ragLabel(frac)]);
+    });
+    rows.push([]);
+    rows.push(["SYNTHÈSE PAR DOMAINE"]);
+    rows.push(["Domaine","Points forts","Points à améliorer","Recommandations"]);
+    DOMAINS.forEach(d => {
+      if(domainFullyNA(c, d.key)) return;
+      const s = data.synth[d.key];
+      for(let i=0;i<5;i++){ rows.push([i===0?d.label:"", s.forts[i]||"", s.ameliorer[i]||"", s.reco[i]||""]); }
+    });
+    rows.push([]);
+    rows.push(["PLAN DE RÉSOLUTION DES PROBLÈMES"]);
+    rows.push(["Domaine","Indicateur","Points à améliorer","Cause/goulot","Activité proposée","Coût estimatif"]);
+    data.plan.forEach(p => {
+      const domLabel = DOMAINS.find(d=>d.key===p.domain)?.label || "";
+      const indLabel = p.indicateur ? (INDICATORS.find(i=>i.id==p.indicateur)?.label || "") : "";
+      rows.push([domLabel, p.indicateur? `Id ${p.indicateur} — ${indLabel}` : "", p.ameliorer, p.cause, p.activite, p.cout]);
+    });
+    rows.push([]);
+    rows.push(["ÉVALUATEURS"]);
+    rows.push(["Rôle","Nom et Prénom","Qualification","Contact"]);
+    EVALUATEUR_ROLES.forEach(r => {
+      const ev = data.evaluateurs[r.key];
+      rows.push([r.label, ev.nom, ev.qualif, ev.contact]);
+    });
+
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+    ws['!cols'] = [{wch:20},{wch:46},{wch:12},{wch:14},{wch:12},{wch:12},{wch:12},{wch:12},{wch:50}];
+    let sheetName = `FS${c.order}`.slice(0,31);
+    XLSX.utils.book_append_sheet(wb, ws, sheetName);
+  });
+
+  if(hasAdminAccess()){
+    function groupSheet(field, title){
+      const groups = {};
+      vc.forEach(c => { const key = (c[field]||'').trim() || 'Non renseigné'; (groups[key] = groups[key]||[]).push(c); });
+      const rows = [[title],["Nom","Nb FS","Performance moyenne","Données envoyées"]];
+      Object.keys(groups).sort().forEach(key => {
+        const list = groups[key];
+        let sumFrac=0, nSent=0;
+        list.forEach(c=>{ const d=loadFsData(c.id); const t=totalScore(c,effInputs(c,d)); const de=totalPlafond(c); sumFrac+=pct(t,de); if(d.sent) nSent++; });
+        rows.push([key, list.length, list.length? sumFrac/list.length : 0, `${nSent}/${list.length}`]);
+      });
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), title.slice(0,31));
+    }
+    groupSheet('commune', 'Par Commune');
+    groupSheet('zone', 'Par Zone sanitaire');
+  }
+
+  XLSX.writeFile(wb, "Collecte_FS_" + new Date().toISOString().slice(0,10) + ".xlsx");
+});
+
+/* =========================================================================
+   INITIALISATION
+   ========================================================================= */
+function renderAllTools(){
+  renderPerfBanner();
+  renderOutil1();
+  renderOutil3();
+  renderOutil2();
+  const activeTab = document.querySelector('nav.tabs button.active')?.dataset.tab;
+  if(activeTab === 'admin' && hasAdminAccess()){ renderAdmin(); renderUsers(); renderTracking(); renderAggregates(); renderOverrides(); renderAdminSrc(); renderZsManagers(); }
+  if(activeTab === 'graphiques') renderCharts();
+  if(activeTab === 'priorisation') renderPriorisation();
+  if(activeTab === 'plan') renderPlan();
+  if(activeTab === 'photos') renderPhotos();
+}
+</script>
+</body>
+</html>
