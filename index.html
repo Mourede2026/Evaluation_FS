@@ -255,7 +255,6 @@ footer{text-align:center; font-size:11.5px; color:var(--muted); padding:20px;}
   <span class="whoami" id="whoamiBadge"></span>
   <span class="sync-indicator" id="syncIndicator"></span>
   <span class="save-indicator" id="saveIndicator"></span>
-  <button class="btn btn-primary" id="btnInstallApp" style="display:none;">📲 Installer l'application</button>
   <button class="btn btn-primary" id="btnSaveNow">💾 Enregistrer</button>
   <button class="btn btn-ghost" id="btnExportJson">Sauvegarder tout (.json)</button>
   <button class="btn btn-ghost" id="btnImportJson">Importer (.json)</button>
@@ -3083,27 +3082,13 @@ function renderAllTools(){
    ========================================================================= */
 // Le service worker est ce qui permet au navigateur de proposer l'app comme
 // installable (icône sur l'écran d'accueil, ouverture en plein écran comme
-// une vraie application), et permet aussi de la rouvrir hors connexion.
+// une vraie application, via le menu natif du navigateur), et permet aussi
+// de la rouvrir hors connexion.
 if('serviceWorker' in navigator){
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('./sw.js').catch(err => console.warn('Service worker non enregistré :', err));
   });
 }
-let deferredInstallPrompt = null;
-const btnInstallApp = document.getElementById('btnInstallApp');
-window.addEventListener('beforeinstallprompt', (e) => {
-  e.preventDefault();
-  deferredInstallPrompt = e;
-  btnInstallApp.style.display = "";
-});
-btnInstallApp.addEventListener('click', async () => {
-  if(!deferredInstallPrompt) return;
-  btnInstallApp.style.display = "none";
-  deferredInstallPrompt.prompt();
-  await deferredInstallPrompt.userChoice;
-  deferredInstallPrompt = null;
-});
-window.addEventListener('appinstalled', () => { btnInstallApp.style.display = "none"; });
 
 </script>
 </body>
