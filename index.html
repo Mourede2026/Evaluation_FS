@@ -4,6 +4,14 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Outil Unifié de Collecte — Surveillance FS (ANSSP/DSER)</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#12314f">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="icon" type="image/png" sizes="512x512" href="icon-512.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Collecte FS">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
 <style>
@@ -151,6 +159,9 @@ table.admin-table th, table.admin-table td{font-size:12px;}
 
 .photo-grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:14px;}
 .photo-card{border:1px solid var(--line); border-radius:var(--radius); padding:12px; text-align:center;}
+.photo-status{font-size:11.5px; min-height:16px; margin:4px 0;}
+.photo-status.pending{color:var(--muted);}
+.photo-status.ok{color:var(--teal); font-weight:700;}
 .photo-card img{max-width:100%; max-height:160px; border-radius:6px; margin-top:8px; display:none;}
 .photo-card input[type=text]{margin-bottom:8px;}
 
@@ -244,6 +255,7 @@ footer{text-align:center; font-size:11.5px; color:var(--muted); padding:20px;}
   <span class="whoami" id="whoamiBadge"></span>
   <span class="sync-indicator" id="syncIndicator"></span>
   <span class="save-indicator" id="saveIndicator"></span>
+  <button class="btn btn-primary" id="btnInstallApp" style="display:none;">📲 Installer l'application</button>
   <button class="btn btn-primary" id="btnSaveNow">💾 Enregistrer</button>
   <button class="btn btn-ghost" id="btnExportJson">Sauvegarder tout (.json)</button>
   <button class="btn btn-ghost" id="btnImportJson">Importer (.json)</button>
@@ -2702,23 +2714,36 @@ const sendStatusBadge = document.getElementById('sendStatusBadge');
 
 function resizeImage(file, maxWidth, quality){
   return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const img = new Image();
-      img.onload = () => {
+    // On charge l'image via une URL objet (référence légère vers le fichier),
+    // pas via une chaîne base64 (FileReader) : les photos prises directement
+    // avec l'appareil photo d'un téléphone sont souvent volumineuses (plusieurs
+    // Mo), et certains navigateurs mobiles échouent silencieusement à charger
+    // une aussi grande chaîne en src d'image — l'enregistrement semblait alors
+    // ne rien faire, sans aucun message d'erreur.
+    const objectUrl = URL.createObjectURL(file);
+    const img = new Image();
+    let done = false;
+    const cleanup = () => { URL.revokeObjectURL(objectUrl); clearTimeout(timer); };
+    const timer = setTimeout(() => {
+      if(done) return; done = true; cleanup();
+      reject(new Error("Délai dépassé lors du chargement de la photo. Réessayez avec une meilleure connexion ou une photo plus légère."));
+    }, 20000);
+    img.onload = () => {
+      if(done) return; done = true;
+      try{
         const scale = Math.min(1, maxWidth / img.width);
         const canvas = document.createElement('canvas');
-        canvas.width = img.width * scale;
-        canvas.height = img.height * scale;
+        canvas.width = Math.max(1, Math.round(img.width * scale));
+        canvas.height = Math.max(1, Math.round(img.height * scale));
         const ctx = canvas.getContext('2d');
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        resolve(canvas.toDataURL('image/jpeg', quality));
-      };
-      img.onerror = reject;
-      img.src = reader.result;
+        const dataUrl = canvas.toDataURL('image/jpeg', quality);
+        cleanup();
+        resolve(dataUrl);
+      }catch(err){ cleanup(); reject(err); }
     };
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
+    img.onerror = () => { if(done) return; done = true; cleanup(); reject(new Error("Format de photo non pris en charge par ce navigateur.")); };
+    img.src = objectUrl;
   });
 }
 
@@ -2738,6 +2763,7 @@ function renderPhotos(){
         ? `<input type="text" placeholder="Titre de la photo" value="${escapeAttr(p.title)}" data-photo="${slot.key}" data-field="title">`
         : `<strong style="font-size:12.5px;color:var(--navy);">${slot.fixedTitle}</strong>`}
       <div><input type="file" accept="image/*" capture="environment" data-photo="${slot.key}" data-field="file"></div>
+      <div class="photo-status" data-photo-status="${slot.key}"></div>
       <img data-photo-img="${slot.key}" src="${p.data||''}" style="display:${p.data?'block':'none'};">
       ${p.data ? `<div style="margin-top:6px;"><button class="icon-btn" data-photo-clear="${slot.key}">✕ Supprimer</button></div>` : ''}
     `;
@@ -2753,12 +2779,23 @@ function renderPhotos(){
     inp.addEventListener('change', async () => {
       const file = inp.files[0];
       if(!file) return;
+      const statusEl = photoGrid.querySelector(`[data-photo-status="${inp.dataset.photo}"]`);
+      if(statusEl){ statusEl.textContent = "⏳ Traitement de la photo…"; statusEl.className = "photo-status pending"; }
       try{
         const dataUrl = await resizeImage(file, 1000, 0.72);
         currentFsData.photos[inp.dataset.photo].data = dataUrl;
         saveFsData(currentCenterId, currentFsData);
         renderPhotos();
-      }catch(err){ alert("Impossible de charger cette image."); }
+        const newStatusEl = photoGrid.querySelector(`[data-photo-status="${inp.dataset.photo}"]`);
+        if(newStatusEl){
+          newStatusEl.textContent = "✓ Photo enregistrée";
+          newStatusEl.className = "photo-status ok";
+          setTimeout(() => { if(newStatusEl) newStatusEl.textContent = ""; }, 3000);
+        }
+      }catch(err){
+        if(statusEl){ statusEl.textContent = ""; statusEl.className = "photo-status"; }
+        alert("Impossible d'enregistrer cette photo : " + err.message);
+      }
     });
   });
   photoGrid.querySelectorAll('[data-photo-clear]').forEach(btn => {
@@ -3040,6 +3077,34 @@ function renderAllTools(){
   if(activeTab === 'plan') renderPlan();
   if(activeTab === 'photos') renderPhotos();
 }
+
+/* =========================================================================
+   PWA — INSTALLATION DE L'APPLICATION
+   ========================================================================= */
+// Le service worker est ce qui permet au navigateur de proposer l'app comme
+// installable (icône sur l'écran d'accueil, ouverture en plein écran comme
+// une vraie application), et permet aussi de la rouvrir hors connexion.
+if('serviceWorker' in navigator){
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').catch(err => console.warn('Service worker non enregistré :', err));
+  });
+}
+let deferredInstallPrompt = null;
+const btnInstallApp = document.getElementById('btnInstallApp');
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredInstallPrompt = e;
+  btnInstallApp.style.display = "";
+});
+btnInstallApp.addEventListener('click', async () => {
+  if(!deferredInstallPrompt) return;
+  btnInstallApp.style.display = "none";
+  deferredInstallPrompt.prompt();
+  await deferredInstallPrompt.userChoice;
+  deferredInstallPrompt = null;
+});
+window.addEventListener('appinstalled', () => { btnInstallApp.style.display = "none"; });
+
 </script>
 </body>
 </html>
