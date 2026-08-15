@@ -2216,11 +2216,8 @@ function updateFsMeta(){
   fsMeta.innerHTML = `<span class="type-pill">${c.type||"Publique"}</span> ${parts.length ? "· " + escapeHtml(parts.join(" · ")) : "· Compléter l'identification dans l'onglet Administration"}`;
 }
 function updateLockUi(){
-  lockBadgeWrap.innerHTML = currentFsData.locked ? `<span class="badge locked">🔒 Verrouillée</span>` : "";
-  document.querySelectorAll('nav.tabs button').forEach(btn => {
-    const restricted = ['outil1','outil3','outil2','graphiques'].includes(btn.dataset.tab);
-    btn.classList.toggle('locked-tab', restricted && currentFsData.locked);
-  });
+  lockBadgeWrap.innerHTML = "";
+  document.querySelectorAll('nav.tabs button').forEach(btn => btn.classList.remove('locked-tab'));
 }
 
 fsSelect.addEventListener('change', () => {
@@ -2262,9 +2259,9 @@ function renderOutil1(){
   const center = currentCenter();
   const has = !!center;
   document.getElementById('outil1NoFs').style.display = has ? "none" : "";
-  document.getElementById('outil1Locked').style.display = (has && currentFsData.locked) ? "" : "none";
-  document.getElementById('outil1Content').style.display = (has && !currentFsData.locked) ? "" : "none";
-  if(!has || currentFsData.locked) return;
+  document.getElementById('outil1Locked').style.display = "none";
+  document.getElementById('outil1Content').style.display = has ? "" : "none";
+  if(!has) return;
 
   const naIds = NA_INDICATORS_BY_TYPE[center.type] || [];
   const warn = document.getElementById('naWarning');
@@ -2433,9 +2430,9 @@ function discordance(a,b){ const denom = Math.max(a,b); if(!denom) return null; 
 function renderOutil3(){
   const has = !!currentCenterId;
   document.getElementById('outil3NoFs').style.display = has ? "none" : "";
-  document.getElementById('outil3Locked').style.display = (has && currentFsData.locked) ? "" : "none";
-  document.getElementById('outil3Content').style.display = (has && !currentFsData.locked) ? "" : "none";
-  if(!has || currentFsData.locked) return;
+  document.getElementById('outil3Locked').style.display = "none";
+  document.getElementById('outil3Content').style.display = has ? "" : "none";
+  if(!has) return;
   const center = currentCenter();
   ensureAdminSources(center);
 
@@ -2572,7 +2569,7 @@ function renderPriorisation(){
   const has = !!center;
   document.getElementById('prioNoFs').style.display = has ? "none" : "";
   document.getElementById('prioContent').style.display = has ? "" : "none";
-  document.getElementById('prioLockWarning').style.display = (has && currentFsData.locked && !currentFsData.sent) ? "" : "none";
+  document.getElementById('prioLockWarning').style.display = "none";
   if(!has) return;
 
   prioBody.innerHTML = "";
@@ -2636,22 +2633,8 @@ function collectionMissingFields(center, fsData){
 document.querySelector('nav.tabs button[data-tab="priorisation"]').addEventListener('click', (e) => {
   const center = currentCenter();
   if(!center) return;
-  if(!currentFsData.locked && !currentFsData.sent){
-    const missing = collectionMissingFields(center, currentFsData);
-    if(missing.length){
-      e.stopImmediatePropagation();
-      alert("Impossible d'accéder à la Priorisation : " + missing.length + " champ(s) obligatoire(s) non renseigné(s).\n\n" +
-        missing.slice(0,15).join('\n') + (missing.length > 15 ? `\n… et ${missing.length-15} de plus.` : ''));
-      return;
-    }
-    const ok = confirm("Une fois cette page ouverte, les Outils 1, 2, 3 et les Graphiques seront verrouillés pour cette FS "+
-      "(sauf déverrouillage par l'administrateur, ou après l'envoi final des données). Continuer ?");
-    if(!ok){ e.stopImmediatePropagation(); openTab('outil1'); return; }
-    currentFsData.locked = true;
-    saveFsData(currentCenterId, currentFsData);
-    updateLockUi();
-    renderTracking();
-  }
+  // Accès libre à la Priorisation : plus de champs obligatoires ni de verrouillage
+  // automatique des autres pages (Outils 1/2/3, Graphiques) à l'ouverture de cette page.
 }, true);
 
 /* =========================================================================
@@ -2754,7 +2737,7 @@ function renderPhotos(){
       ${slot.editableTitle
         ? `<input type="text" placeholder="Titre de la photo" value="${escapeAttr(p.title)}" data-photo="${slot.key}" data-field="title">`
         : `<strong style="font-size:12.5px;color:var(--navy);">${slot.fixedTitle}</strong>`}
-      <div><input type="file" accept="image/*" data-photo="${slot.key}" data-field="file"></div>
+      <div><input type="file" accept="image/*" capture="environment" data-photo="${slot.key}" data-field="file"></div>
       <img data-photo-img="${slot.key}" src="${p.data||''}" style="display:${p.data?'block':'none'};">
       ${p.data ? `<div style="margin-top:6px;"><button class="icon-btn" data-photo-clear="${slot.key}">✕ Supprimer</button></div>` : ''}
     `;
@@ -2841,10 +2824,6 @@ const tabButtons = document.querySelectorAll('nav.tabs button');
 tabButtons.forEach(btn => {
   btn.addEventListener('click', () => {
     if(btn.dataset.tab === 'admin' && !hasAdminAccess()) return;
-    if(['outil1','outil3','outil2','graphiques'].includes(btn.dataset.tab) && currentFsData.locked){
-      alert("Cette FS est verrouillée (page Priorisation déjà ouverte). Demandez à l'administrateur de la déverrouiller, ou envoyez les données finales pour déverrouiller automatiquement.");
-      return;
-    }
     tabButtons.forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
