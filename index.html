@@ -74,7 +74,8 @@ main{max-width:1260px; margin:0 auto; padding:22px 18px 60px;}
 
 .card{background:var(--card); border:1px solid var(--line); border-radius:var(--radius); margin-bottom:18px; overflow:hidden;}
 .card h2{margin:0; padding:12px 16px; background:var(--teal-light); color:var(--navy); font-size:14.5px; border-bottom:1px solid var(--line); font-weight:700;}
-.card .body{padding:16px;}
+.card .body{padding:16px; overflow-x:auto; -webkit-overflow-scrolling:touch;}
+.card .body>table, .card .body table{min-width:560px;}
 .hint{font-size:12.5px; color:var(--muted); line-height:1.5; margin:0 0 12px;}
 .hint.warn{background:#fdf1cf; color:#8a6d1b; padding:8px 10px; border-radius:6px; border:1px solid #ecd08a;}
 .hint.danger{background:#fbe1de; color:#a33327; padding:8px 10px; border-radius:6px; border:1px solid #ecb;}
@@ -128,10 +129,12 @@ table.admin-table th, table.admin-table td{font-size:12px;}
 .lock-screen p{color:var(--muted); font-size:13.5px; max-width:420px; margin:6px auto 18px;}
 
 .chart-grid{display:grid; grid-template-columns:1fr 1fr; gap:18px;}
-.chart-wrap{background:#fff; border:1px solid var(--line); border-radius:var(--radius); padding:14px;}
-.chart-wrap h3{margin:0 0 10px; font-size:13px; color:var(--navy);}
-.chart-wrap canvas{max-height:320px;}
+.chart-wrap{background:#fff; border:1px solid var(--line); border-radius:var(--radius); padding:14px; position:relative; height:320px; display:flex; flex-direction:column;}
+.chart-wrap h3{margin:0 0 10px; font-size:13px; color:var(--navy); flex:none;}
+.chart-wrap .chart-canvas-box{position:relative; flex:1; min-height:0;}
+.chart-wrap canvas{position:absolute; inset:0; width:100% !important; height:100% !important;}
 @media (max-width:900px){.chart-grid{grid-template-columns:1fr;} .synth-grid{grid-template-columns:1fr !important;}}
+@media (max-width:600px){.chart-wrap{height:260px;}}
 
 .domain-block{border:1px solid var(--line); border-radius:var(--radius); margin-bottom:16px; overflow:hidden;}
 .domain-block .dh{background:var(--navy); color:#fff; padding:10px 14px; font-weight:700; font-size:13px;}
@@ -163,6 +166,33 @@ footer{text-align:center; font-size:11.5px; color:var(--muted); padding:20px;}
 .status-line{display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin:10px 0;}
 
 @media print{ header.app, nav.tabs, .fs-toolbar, .btn{display:none !important;} .panel{display:block !important;} }
+
+/* ---------- MOBILE ---------- */
+@media (max-width:640px){
+  :root{font-size:14px;}
+  header.app{flex-wrap:wrap; padding:8px 12px; gap:8px;}
+  header.app h1{flex:1 1 100%; order:-1; font-size:13.5px;}
+  header.app .spacer{display:none;}
+  header.app .whoami{font-size:11px; padding:5px 9px;}
+  .sync-indicator, .save-indicator{font-size:10.5px; padding:3px 8px;}
+  header.app .btn{padding:7px 10px; font-size:12px;}
+  nav.tabs{top:auto; padding:0 8px;}
+  main{padding:14px 10px 50px;}
+  .card .body{padding:12px;}
+  table{font-size:11.5px;}
+  th,td{padding:5px;}
+  .fs-toolbar{flex-direction:column; align-items:stretch;}
+  .fs-toolbar select{max-width:100%;}
+  .perf-banner{gap:10px;}
+  .perf-box{min-width:120px; padding:10px 12px;}
+  .perf-box .val{font-size:21px;}
+  .perf-box.big .val{font-size:26px;}
+  .synth-grid{grid-template-columns:1fr !important;}
+  .synth-col{border-right:none; border-bottom:1px solid var(--line);}
+  .evaluateur-grid, .photo-grid{grid-template-columns:1fr;}
+  .login-card{max-width:100%;}
+  .login-body{padding:16px;}
+}
 </style>
 </head>
 <body>
@@ -575,12 +605,12 @@ footer{text-align:center; font-size:11.5px; color:var(--muted); padding:20px;}
     <div id="graphNoFs" class="empty-state">Sélectionnez une FS ci-dessus pour voir les graphiques.</div>
     <div id="graphContent" style="display:none;">
       <div class="chart-grid">
-        <div class="chart-wrap"><h3>Performance par domaine — FS en cours</h3><canvas id="chartDomains"></canvas></div>
-        <div class="chart-wrap"><h3>Exactitude des données — discordances (%) — FS en cours</h3><canvas id="chartExactitude"></canvas></div>
+        <div class="chart-wrap"><h3>Performance par domaine — FS en cours</h3><div class="chart-canvas-box"><canvas id="chartDomains"></canvas></div></div>
+        <div class="chart-wrap"><h3>Exactitude des données — discordances (%) — FS en cours</h3><div class="chart-canvas-box"><canvas id="chartExactitude"></canvas></div></div>
       </div>
       <div class="chart-wrap" style="margin-top:18px;">
         <h3>Comparaison de la performance globale — FS visibles</h3>
-        <canvas id="chartCompare"></canvas>
+        <div class="chart-canvas-box"><canvas id="chartCompare"></canvas></div>
       </div>
     </div>
   </section>
@@ -2488,7 +2518,7 @@ function renderCharts(){
   };
   if(chartDomainsInst) chartDomainsInst.destroy();
   chartDomainsInst = new Chart(ctx1, { type:'bar', data:data1,
-    options:{ indexAxis:'y', responsive:true, scales:{ x:{ min:0, max:100, ticks:{callback:v=>v+'%'} } },
+    options:{ indexAxis:'y', responsive:true, maintainAspectRatio:false, scales:{ x:{ min:0, max:100, ticks:{callback:v=>v+'%'} } },
       plugins:{ legend:{display:false}, tooltip:{callbacks:{label:c=>c.parsed.x+'%'}} } } });
 
   const ctx2 = document.getElementById('chartExactitude').getContext('2d');
@@ -2502,7 +2532,7 @@ function renderCharts(){
     datasets: [{ label:'Discordance (%)', data: discVals, backgroundColor:'#c0392b', borderRadius:4 }] };
   if(chartExactitudeInst) chartExactitudeInst.destroy();
   chartExactitudeInst = new Chart(ctx2, { type:'bar', data:data2,
-    options:{ responsive:true, scales:{ y:{ min:0, max:100, ticks:{callback:v=>v+'%'} } },
+    options:{ responsive:true, maintainAspectRatio:false, scales:{ y:{ min:0, max:100, ticks:{callback:v=>v+'%'} } },
       plugins:{ legend:{display:false}, tooltip:{callbacks:{label:c=>c.parsed.y+'%'}} } } });
 
   const sorted = visibleCenters();
@@ -2518,9 +2548,18 @@ function renderCharts(){
   chartCompareInst = new Chart(ctx3, { type:'bar',
     data:{ labels: compareLabels, datasets:[{ label:'Performance globale (%)', data: compareData,
       backgroundColor: sorted.map(c => c.id===currentCenterId ? '#1f4e78' : '#9fc6d8'), borderRadius:4 }] },
-    options:{ responsive:true, scales:{ y:{ min:0, max:100, ticks:{callback:v=>v+'%'} } },
+    options:{ responsive:true, maintainAspectRatio:false, scales:{ y:{ min:0, max:100, ticks:{callback:v=>v+'%'} } },
       plugins:{ legend:{display:false}, tooltip:{callbacks:{label:c=>c.parsed.y+'%'}} } } });
 }
+// Recalcule la taille des graphiques quand l'écran change de taille/orientation
+// (utile sur mobile : sans ça, un graphique créé avant une rotation d'écran reste mal dimensionné).
+let chartResizeTimer = null;
+window.addEventListener('resize', () => {
+  clearTimeout(chartResizeTimer);
+  chartResizeTimer = setTimeout(() => {
+    [chartDomainsInst, chartExactitudeInst, chartCompareInst].forEach(ch => { if(ch) ch.resize(); });
+  }, 150);
+});
 
 /* =========================================================================
    PRIORISATION
@@ -2574,28 +2613,23 @@ function renderPriorisation(){
   });
 }
 
-// Vérifie que tous les champs obligatoires (Outil 1 + Outil 3) ont été renseignés
-// (par l'équipe ou par l'administrateur selon le champ) avant d'autoriser la Priorisation.
+// Vérifie que les champs obligatoires d'Outil 1 (hors Oui/Non, hors admin) ont été
+// renseignés avant d'autoriser la Priorisation.
+// NB : les questions Oui/Non ont déjà une valeur par défaut valide ("Non") — ce n'est
+// pas une case vide, donc on ne les bloque plus. Idem pour l'Outil 3 : une valeur à 0
+// est une estimation légitime (pas une case "non remplie") ; c'est l'écart/discordance
+// entre les sources qui signale un problème, pas la présence d'un zéro.
 function collectionMissingFields(center, fsData){
   const missing = [];
   INDICATORS.forEach(ind => {
     if(!indicatorApplicable(center, ind)) return;
+    if(ind.rule === 'oui2') return; // "Non" par défaut = réponse valide, pas une case vide
     if(ADMIN_CONTROLLED_IDS.includes(ind.id)){
       if(!(center.overridesTouched && center.overridesTouched[ind.id])) missing.push(`Id ${ind.id} (à renseigner par l'administrateur)`);
       return;
     }
     if(!(fsData.touched && fsData.touched[ind.id])) missing.push(`Id ${ind.id} — ${ind.label}`);
   });
-  [0,1].forEach(idx => {
-    ['simr','dcm','dcn','d5'].forEach(f => {
-      const key = idx+'_'+f;
-      if(!(fsData.touchedSrc && fsData.touchedSrc[key])) missing.push(`Outil 3 — ${EXACT_SOURCES[idx]}`);
-    });
-  });
-  ADMIN_CONTROLLED_SRC_IDX.forEach(idx => {
-    if(!(center.adminSourcesTouched && center.adminSourcesTouched[idx])) missing.push(`Outil 3 — ${EXACT_SOURCES[idx]} (à renseigner par l'administrateur)`);
-  });
-  // dédoublonne (les 4 champs d'une même source Outil 3 équipe génèrent le même libellé)
   return Array.from(new Set(missing));
 }
 
