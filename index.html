@@ -118,6 +118,7 @@ tr.total-row td{background:var(--green); font-weight:700;}
 tr.na-row td{background:var(--grey); color:#9aa4a8; font-style:italic;}
 tr.na-row input, tr.na-row select{background:var(--grey); color:#9aa4a8;}
 tr.admin-ctrl-row td{background:#f2f4f4;}
+input.input-warning{border-color:#d97706 !important; background:#fff8ec !important; box-shadow:0 0 0 1px #d97706 inset;}
 input[type=number], input[type=text], input[type=password], input[type=date], select, textarea{
   width:100%; padding:6px 7px; border:1px solid var(--line); border-radius:5px; font-size:12.8px; font-family:inherit; background:#fff;
 }
@@ -144,6 +145,8 @@ td.rag-green{background:#dcf0e2; color:#227a44; font-weight:700; text-align:cent
 .badge.role{background:rgba(255,255,255,.15); color:#fff;}
 
 .fs-toolbar{display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:16px;}
+.fs-toolbar-main{display:flex; gap:8px; align-items:center; flex-wrap:nowrap; min-width:0;}
+.fs-toolbar-main select, .fs-toolbar-main input[type=date]{min-width:0;}
 .fs-toolbar select{max-width:340px;}
 .fs-toolbar .fs-meta{font-size:12px; color:var(--muted);}
 .type-pill{font-size:11px; font-weight:700; padding:2px 8px; border-radius:20px; background:var(--teal-light); color:var(--navy);}
@@ -216,6 +219,9 @@ footer{text-align:center; font-size:11.5px; color:var(--muted); padding:20px;}
   table{font-size:11.5px;}
   th,td{padding:5px;}
   .fs-toolbar{flex-direction:column; align-items:stretch;}
+  .fs-toolbar-main label{display:none;}
+  .fs-toolbar-main select{flex:1 1 auto; min-width:0; font-size:12.5px;}
+  .fs-toolbar-main input[type=date]{flex:1 1 auto; min-width:0; font-size:12.5px; padding:6px 4px;}
   .fs-toolbar select{max-width:100%;}
   .perf-banner{gap:10px;}
   .perf-box{min-width:120px; padding:10px 12px;}
@@ -324,7 +330,6 @@ footer{text-align:center; font-size:11.5px; color:var(--muted); padding:20px;}
                 <th>Département</th>
                 <th>Zone sanitaire</th>
                 <th>Commune</th>
-                <th class="small-col">Date d'évaluation</th>
                 <th class="xsmall-col center">Action</th>
               </tr>
             </thead>
@@ -517,7 +522,7 @@ footer{text-align:center; font-size:11.5px; color:var(--muted); padding:20px;}
           </div>
           <div style="overflow-x:auto;">
           <table id="trackingTable">
-            <thead><tr><th>Ordre</th><th>FS</th><th>Type</th><th>Commune</th><th>Zone sanitaire</th><th>Date de collecte</th><th class="center">Performance globale</th><th class="center">Priorisation</th><th class="center">Données envoyées</th></tr></thead>
+            <thead><tr><th>Ordre</th><th>FS</th><th>Type</th><th>Commune</th><th>Zone sanitaire</th><th>Date de saisie (évaluateurs)</th><th class="center">Performance globale</th><th class="center">Priorisation</th><th class="center">Données envoyées</th></tr></thead>
             <tbody id="trackingBody"></tbody>
           </table>
           </div>
@@ -581,10 +586,12 @@ footer{text-align:center; font-size:11.5px; color:var(--muted); padding:20px;}
   <!-- ============================ SHARED FS TOOLBAR ============================ -->
   <div id="fsToolbarWrap" style="display:none;">
     <div class="fs-toolbar">
-      <label style="font-weight:700;font-size:13px;color:var(--navy);">FS en cours :</label>
-      <select id="fsSelect"></select>
-      <label style="font-weight:700;font-size:13px;color:var(--navy);">Date de collecte :</label>
-      <input type="date" id="fsCollectionDate">
+      <div class="fs-toolbar-main">
+        <label style="font-weight:700;font-size:13px;color:var(--navy);">FS en cours :</label>
+        <select id="fsSelect"></select>
+        <label style="font-weight:700;font-size:13px;color:var(--navy);">Date de collecte :</label>
+        <input type="date" id="fsCollectionDate">
+      </div>
       <span class="fs-meta" id="fsMeta"></span>
       <span id="lockBadgeWrap"></span>
     </div>
@@ -842,6 +849,47 @@ const NA_INDICATORS_BY_TYPE = {
 // indicateurs dont les valeurs sont centralisées par l'administrateur (par FS) :
 // affichés en grisé et pris en compte dans les calculs, mais non modifiables dans les formulaires des équipes
 const ADMIN_CONTROLLED_IDS = [12, 19, 20];
+
+// Dénominateurs calqués sur un autre indicateur (ou sur une valeur fixe) : ils ne
+// sont plus saisissables, seulement affichés — la valeur réelle est copiée
+// automatiquement à chaque modification de la source.
+const DENOMINATOR_LINKS = {
+  4:  {type:'mirror', srcId:1,  srcField:'d'},   // Id4 = Id1 (dénominateur)
+  7:  {type:'mirror', srcId:6,  srcField:'n'},   // Id7 = Id6 (numérateur)
+  8:  {type:'mirror', srcId:6,  srcField:'n'},   // Id8 = Id6 (numérateur)
+  9:  {type:'mirror', srcId:2,  srcField:'d'},   // Id9 = Id2 (dénominateur)
+  13: {type:'constant', value:1},
+  16: {type:'constant', value:1},
+  17: {type:'constant', value:1},
+  18: {type:'constant', value:1},
+  21: {type:'mirror', srcId:14, srcField:'n'},   // Id21 = Id14 (numérateur)
+  23: {type:'constant', value:12},
+  27: {type:'constant', value:1},
+  28: {type:'constant', value:1},
+  29: {type:'mirror', srcId:2,  srcField:'d'},   // Id29 = Id2 (dénominateur)
+  30: {type:'constant', value:1},
+};
+// Table inverse : quand une de ces valeurs source change, quels indicateurs
+// dépendants doivent recalculer leur dénominateur affiché.
+const DENOMINATOR_LINK_DEPENDENTS = {};
+Object.keys(DENOMINATOR_LINKS).forEach(id => {
+  const link = DENOMINATOR_LINKS[id];
+  if(link.type === 'mirror'){
+    const key = link.srcId + '.' + link.srcField;
+    (DENOMINATOR_LINK_DEPENDENTS[key] = DENOMINATOR_LINK_DEPENDENTS[key] || []).push(parseInt(id));
+  }
+});
+function resolveLinkedDenominator(center, fsData, indId){
+  const link = DENOMINATOR_LINKS[indId];
+  if(!link) return null;
+  if(link.type === 'constant') return link.value;
+  const srcAdminCtrl = ADMIN_CONTROLLED_IDS.includes(link.srcId);
+  const srcInp = srcAdminCtrl ? ((center.adminOverrides && center.adminOverrides[link.srcId]) || {n:0,d:0}) : (fsData.inputs[link.srcId] || {n:0,d:0});
+  return srcInp[link.srcField] || 0;
+}
+// Indicateurs pour lesquels le numérateur doit rester ≤ dénominateur (avertissement
+// visuel non bloquant) — exception : Id 6.
+const NUM_LE_DENOM_EXCLUDED_IDS = [6];
 
 // sources de l'Outil 3 centralisées par l'administrateur/gestionnaire ZS (par FS) :
 // index 2 = Rapport hebdomadaire FS transmis au CSE, 3 = Base SIMR au CSE, 4 = DHIS2 au CSE
@@ -1464,6 +1512,15 @@ function effInputs(center, fsData){
   if(center && center.adminOverrides){
     ADMIN_CONTROLLED_IDS.forEach(id => { if(center.adminOverrides[id]) merged[id] = center.adminOverrides[id]; });
   }
+  // Dénominateurs calqués sur un autre indicateur / une valeur fixe : recalculés ici
+  // systématiquement, pour que tous les calculs (scores, graphiques, exports,
+  // priorisation) soient toujours corrects, même sans avoir ouvert l'Outil 1.
+  Object.keys(DENOMINATOR_LINKS).forEach(idStr => {
+    const id = parseInt(idStr);
+    if(!merged[id]) return;
+    const linkedVal = resolveLinkedDenominator(center, {inputs: merged}, id);
+    merged[id] = Object.assign({}, merged[id], {d: linkedVal});
+  });
   return merged;
 }
 // fusionne les sources de l'Outil 3 saisies par l'équipe (idx 0,1) avec les sources
@@ -1776,7 +1833,6 @@ function renderAdmin(){
       <td><input type="text" value="${escapeAttr(c.departement)}" data-field="departement"></td>
       <td><input type="text" value="${escapeAttr(c.zone)}" data-field="zone" ${ROLE==='zsmanager'?'readonly title="Fixé par votre zone de gestion"':''}></td>
       <td><input type="text" value="${escapeAttr(c.commune)}" data-field="commune"></td>
-      <td><input type="date" value="${escapeAttr(c.date)}" data-field="date"></td>
       <td class="center"><button class="icon-btn" title="Supprimer">✕</button></td>
     `;
     tr.querySelectorAll('input,select').forEach(inp => {
@@ -2643,8 +2699,20 @@ function renderOutil1(){
           <option value="Oui" ${inp.b==="Oui"?"selected":""}>Oui</option>
         </select></td>`;
       } else {
-        ndHtml = `<td class="input-cell"><input type="number" min="0" step="1" value="${inp.n}" data-ind="${ind.id}" data-field="n" ${na?'disabled':''} title="${escapeAttr(ind.nLabel||'Numérateur')}"></td>
-                   <td class="input-cell"><input type="number" min="0" step="1" value="${inp.d}" data-ind="${ind.id}" data-field="d" ${na?'disabled':''} title="${escapeAttr(ind.dLabel||'Dénominateur')}"></td>`;
+        const dLink = DENOMINATOR_LINKS[ind.id];
+        let dCellHtml;
+        if(dLink){
+          const linkedVal = resolveLinkedDenominator(center, currentFsData, ind.id);
+          inp.d = linkedVal; // garde la donnée stockée synchronisée (exports, scores, etc.)
+          const srcHint = dLink.type === 'constant' ? `valeur fixe : ${dLink.value}` : `calqué sur Id ${dLink.srcId}`;
+          dCellHtml = `<td class="center" style="background:#eef0f0;color:#5b6b74;" title="Dénominateur non modifiable — ${srcHint}">${linkedVal} <span title="${srcHint}">🔒</span></td>`;
+        } else {
+          dCellHtml = `<td class="input-cell"><input type="number" min="0" step="1" value="${inp.d}" data-ind="${ind.id}" data-field="d" ${na?'disabled':''} title="${escapeAttr(ind.dLabel||'Dénominateur')}"></td>`;
+        }
+        const nExceeds = !NUM_LE_DENOM_EXCLUDED_IDS.includes(ind.id) && Number(inp.n) > Number(inp.d);
+        ndHtml = `<td class="input-cell"><input type="number" min="0" step="1" value="${inp.n}" data-ind="${ind.id}" data-field="n" ${na?'disabled':''}
+                     class="${nExceeds?'input-warning':''}" title="${nExceeds?'⚠ Le numérateur dépasse le dénominateur. ':''}${escapeAttr(ind.nLabel||'Numérateur')}"></td>
+                   ${dCellHtml}`;
       }
 
       tr.innerHTML = `
@@ -2684,7 +2752,14 @@ function onIndicatorChange(e){
   currentFsData.touched[id] = true;
   markFsDirty();
   renderPerfBanner();
-  renderOutil1SoftUpdate(ind);
+  // Si cette valeur sert de source à un dénominateur calqué (Id4/7/8/9/21/29), on
+  // refait un rendu complet pour que ces dénominateurs affichés se mettent à jour
+  // immédiatement, plutôt qu'une simple mise à jour partielle de la ligne modifiée.
+  if(DENOMINATOR_LINK_DEPENDENTS[id + '.' + field]){
+    renderOutil1();
+  } else {
+    renderOutil1SoftUpdate(ind);
+  }
   renderOutil2();
   const activeTab = document.querySelector('nav.tabs button.active')?.dataset.tab;
   if(activeTab === 'graphiques') renderCharts();
