@@ -13,7 +13,14 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Collecte FS">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script>
+// Filet de sécurité : si jsDelivr est injoignable pour une raison quelconque,
+// on retente automatiquement depuis cdnjs (autre CDN) avant d'abandonner.
+if(typeof Chart === 'undefined'){
+  document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"><\/script>');
+}
+</script>
 <style>
 :root{
   --navy:#12314f; --navy-2:#1f4e78; --teal:#1b8a7a; --teal-light:#e6f4f1;
@@ -2113,6 +2120,10 @@ function renderCommuneChart(){
   empty.style.display = "none"; wrap.style.display = "";
 
   const list = groups[communeChartSelect.value] || [];
+  if(typeof Chart === 'undefined'){
+    document.querySelector('#communeChartWrap .chart-canvas-box').innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#c0392b;text-align:center;padding:12px;font-size:12.5px;">⚠ Impossible de charger la librairie de graphiques (problème de connexion).</div>';
+    return;
+  }
   try{
     // Agrège score/plafond par domaine sur toutes les FS de la commune sélectionnée
     const domainAgg = {};
@@ -2727,6 +2738,15 @@ function renderCharts(){
   if(!has) return;
   const center = currentCenter();
 
+  // Si la librairie de graphiques n'a pas pu se charger du tout (souci réseau/CDN),
+  // on l'affiche clairement au lieu de laisser des cadres vides sans explication.
+  if(typeof Chart === 'undefined'){
+    document.querySelectorAll('.chart-canvas-box').forEach(box => {
+      box.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#c0392b;text-align:center;padding:12px;font-size:12.5px;">⚠ Impossible de charger la librairie de graphiques (problème de connexion). Rechargez la page une fois connecté à internet.</div>';
+    });
+    return;
+  }
+
   // Chaque graphique est isolé dans son propre try/catch : si l'un d'eux
   // rencontre un souci de données, les autres se chargent quand même
   // (avant cette correction, une erreur sur un seul graphique empêchait
@@ -3061,17 +3081,21 @@ function renderPhotos(){
     : `<span class="badge notsent">Pas encore envoyé</span>`;
 }
 
-// Vérifie que la synthèse (points forts / à améliorer / recommandations) de chaque
-// domaine applicable, ainsi que le plan d'action, sont renseignés avant de permettre
-// l'envoi final des données.
+// Vérifie que, pour chaque domaine applicable, AU MOINS UNE des 3 catégories de la
+// synthèse (points forts / à améliorer / recommandations) contient au moins une
+// entrée (pas besoin des 3 catégories, ni des 5 lignes de chacune), ainsi que le
+// plan d'action, avant de permettre l'envoi final des données.
 function prioAndPlanMissing(center, fsData){
   const missing = [];
   DOMAINS.forEach(d => {
     if(domainFullyNA(center, d.key)) return;
     const s = fsData.synth[d.key];
-    if(!s.forts.some(v => (v||'').trim())) missing.push(`${d.label} — Points forts`);
-    if(!s.ameliorer.some(v => (v||'').trim())) missing.push(`${d.label} — Points à améliorer`);
-    if(!s.reco.some(v => (v||'').trim())) missing.push(`${d.label} — Recommandations`);
+    const hasForts = s.forts.some(v => (v||'').trim());
+    const hasAmeliorer = s.ameliorer.some(v => (v||'').trim());
+    const hasReco = s.reco.some(v => (v||'').trim());
+    if(!hasForts && !hasAmeliorer && !hasReco){
+      missing.push(`${d.label} — au moins un point fort, point à améliorer ou une recommandation`);
+    }
   });
   const planOk = (fsData.plan||[]).some(row => (row.domain||'').trim() && (row.indicateur||'').toString().trim() && (row.activite||'').trim());
   if(!planOk) missing.push("Plan d'action — aucune ligne complète (domaine, indicateur et activité) renseignée");
