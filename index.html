@@ -363,9 +363,18 @@ footer{text-align:center; font-size:11.5px; color:var(--muted); padding:20px;}
             <tbody id="usersBody"></tbody>
           </table>
           </div>
-          <div style="margin-top:12px;">
+          <div style="margin-top:12px; display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
             <button class="btn btn-outline" id="btnAddUser">+ Ajouter une équipe</button>
+            <label class="btn btn-outline" style="display:inline-block;">
+              📥 Importer l'assignation des centres (.xlsx / .csv)
+              <input type="file" id="fileImportAssignments" accept=".xlsx,.xls,.csv" style="display:none">
+            </label>
           </div>
+          <p class="hint" style="margin-top:10px;">Format attendu pour l'import : colonnes <code>N° équipe</code>,
+          <code>Nom de l'équipe</code> (facultatif), <code>N° des centres assignés</code> (numéros séparés par des virgules,
+          ex. <code>1,2,5,7</code> — ce sont les mêmes numéros que la colonne « Ordre » de la table des Centres ci-dessus).
+          Une équipe déjà existante (retrouvée par son numéro) voit sa liste de centres <strong>remplacée</strong> par
+          celle du fichier ; une équipe absente est créée automatiquement.</p>
         </div>
       </div>
 
@@ -1998,6 +2007,64 @@ document.getElementById('btnAddUser').addEventListener('click', () => {
   const u = { id: uidU(), teamName: `Équipe ${n}`, username: `equipe${n}`, password: Math.random().toString(36).slice(2,8), centerIds: [], createdByZone };
   users.push(u); markUsersDirty();
   renderUsers();
+});
+
+/* --- Import en masse de l'assignation des centres aux équipes (.xlsx / .csv) --- */
+// Une équipe est retrouvée par le numéro contenu dans son nom (ex. "Équipe 3" -> 3) ;
+// si aucune équipe ne correspond à ce numéro, une nouvelle est créée. Les centres sont
+// retrouvés par leur numéro d'Ordre (colonne "N°" de la table des Centres).
+document.getElementById('fileImportAssignments').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if(!file) return;
+  readWorkbookRows(file, (err, rows) => {
+    if(err){ alert("Impossible de lire ce fichier : " + err.message); e.target.value = ""; return; }
+    if(!rows.length){ alert("Fichier vide."); e.target.value = ""; return; }
+    const headerRow = rows[0].map(normalizeHeader);
+    const numIdx = headerRow.findIndex(h => h.includes('equipe') && !h.includes('nom'));
+    const nameIdx = headerRow.findIndex(h => h.includes('equipe') && h.includes('nom'));
+    const centresIdx = headerRow.findIndex(h => h.includes('centre'));
+    if(numIdx === -1){ alert("Impossible de trouver une colonne 'N° équipe' dans le fichier."); e.target.value = ""; return; }
+    if(centresIdx === -1){ alert("Impossible de trouver une colonne 'Centres assignés' dans le fichier."); e.target.value = ""; return; }
+    let updated = 0, created = 0;
+    const centerNotFound = new Set();
+    const scopeCenters = ROLE === 'zsmanager' ? visibleCenters() : centers;
+    for(let i=1;i<rows.length;i++){
+      const row = rows[i];
+      if(!row || row.every(v => v===undefined || v===null || v==="")) continue;
+      const numRaw = row[numIdx];
+      if(numRaw === undefined || numRaw === null || numRaw === "") continue;
+      const n = parseInt(numRaw);
+      if(!n) continue;
+      const nameVal = nameIdx !== -1 ? String(row[nameIdx]||'').trim() : '';
+      const centresRaw = centresIdx !== -1 ? String(row[centresIdx]||'') : '';
+      const centerNums = centresRaw.split(/[,;\/]+/).map(s=>s.trim()).filter(Boolean).map(s=>parseInt(s)).filter(x=>!isNaN(x));
+      const centerIds = [];
+      centerNums.forEach(cn => {
+        const c = scopeCenters.find(cc => cc.order === cn);
+        if(c) centerIds.push(c.id); else centerNotFound.add(cn);
+      });
+      let u = users.find(x => {
+        const m = (x.teamName||'').match(/(\d+)/);
+        return m && parseInt(m[1]) === n;
+      });
+      if(u){
+        u.centerIds = centerIds;
+        if(nameVal) u.teamName = nameVal;
+        updated++;
+      } else {
+        const createdByZone = ROLE === 'zsmanager' && CURRENT_ZSMANAGER ? CURRENT_ZSMANAGER.zone : null;
+        u = { id: uidU(), teamName: nameVal || `Équipe ${n}`, username: `equipe${n}`, password: Math.random().toString(36).slice(2,8), centerIds, createdByZone };
+        users.push(u);
+        created++;
+      }
+    }
+    saveUsers(users);
+    renderUsers();
+    let msg = `${created} équipe(s) créée(s), ${updated} mise(s) à jour.`;
+    if(centerNotFound.size) msg += `\n\nN° de centre(s) non trouvé(s) (ignorés) : ${Array.from(centerNotFound).sort((a,b)=>a-b).join(', ')}`;
+    alert(msg);
+    e.target.value = "";
+  });
 });
 
 /* --- Suivi / synchronisation des soumissions --- */
