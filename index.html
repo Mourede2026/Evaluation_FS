@@ -479,7 +479,7 @@ footer{text-align:center; font-size:11.5px; color:var(--muted); padding:20px;}
           </div>
           <div style="overflow-x:auto;">
           <table id="trackingTable">
-            <thead><tr><th>Ordre</th><th>FS</th><th>Type</th><th>Commune</th><th>Zone sanitaire</th><th class="center">Performance globale</th><th class="center">Priorisation</th><th class="center">Données envoyées</th></tr></thead>
+            <thead><tr><th>Ordre</th><th>FS</th><th>Type</th><th>Commune</th><th>Zone sanitaire</th><th>Date de collecte</th><th class="center">Performance globale</th><th class="center">Priorisation</th><th class="center">Données envoyées</th></tr></thead>
             <tbody id="trackingBody"></tbody>
           </table>
           </div>
@@ -545,6 +545,8 @@ footer{text-align:center; font-size:11.5px; color:var(--muted); padding:20px;}
     <div class="fs-toolbar">
       <label style="font-weight:700;font-size:13px;color:var(--navy);">FS en cours :</label>
       <select id="fsSelect"></select>
+      <label style="font-weight:700;font-size:13px;color:var(--navy);">Date de collecte :</label>
+      <input type="date" id="fsCollectionDate">
       <span class="fs-meta" id="fsMeta"></span>
       <span id="lockBadgeWrap"></span>
     </div>
@@ -2014,6 +2016,7 @@ function renderTracking(){
       <td>${c.type}</td>
       <td>${escapeHtml(c.commune||'—')}</td>
       <td>${escapeHtml(c.zone||'—')}</td>
+      <td class="center">${c.date ? new Date(c.date).toLocaleDateString('fr-FR') : '<span style="color:var(--muted);">—</span>'}</td>
       <td class="center">${denom? fmtPct(pct(total,denom)) : "—"} (${total}/${denom})</td>
       <td class="center"><span class="badge ${d.locked?'locked':'moyenne'}">${d.locked?'Verrouillée':'En cours'}</span></td>
       <td class="center"><span class="badge ${d.sent?'sent':'notsent'}">${d.sent ? ('Reçues le '+ (d.sentAt? new Date(d.sentAt).toLocaleDateString('fr-FR') : '')) : 'Non reçues'}</span></td>
@@ -2441,7 +2444,22 @@ function refreshFsSelect(){
   fsToolbarWrap.style.display = (vc.length && activeTab !== 'admin') ? "" : "none";
   updateFsMeta();
   updateLockUi();
+  updateCollectionDateField();
 }
+const fsCollectionDate = document.getElementById('fsCollectionDate');
+function updateCollectionDateField(){
+  const c = currentCenter();
+  fsCollectionDate.value = c ? (c.date || "") : "";
+  fsCollectionDate.disabled = !c;
+}
+fsCollectionDate.addEventListener('change', () => {
+  const c = currentCenter();
+  if(!c) return;
+  c.date = fsCollectionDate.value;
+  saveCenters(centers);
+  updateFsMeta();
+  if(hasAdminAccess()) renderTracking();
+});
 function updateFsMeta(){
   const c = currentCenter();
   if(!c){ fsMeta.textContent = ""; return; }
@@ -2459,6 +2477,7 @@ fsSelect.addEventListener('change', () => {
   currentFsData = loadFsData(currentCenterId);
   updateFsMeta();
   updateLockUi();
+  updateCollectionDateField();
   renderAllTools();
 });
 
@@ -3099,6 +3118,10 @@ function prioAndPlanMissing(center, fsData){
   });
   const planOk = (fsData.plan||[]).some(row => (row.domain||'').trim() && (row.indicateur||'').toString().trim() && (row.activite||'').trim());
   if(!planOk) missing.push("Plan d'action — aucune ligne complète (domaine, indicateur et activité) renseignée");
+  // Un seul évaluateur suffit (Évaluateur 1 ou Évaluateur 2) — rapporteur et
+  // superviseurs restent entièrement facultatifs.
+  const hasEvaluateur = ['eval1','eval2'].some(k => (fsData.evaluateurs[k]?.nom||'').trim());
+  if(!hasEvaluateur) missing.push("Évaluateurs — au moins 1 évaluateur (nom) doit être renseigné");
   return missing;
 }
 document.getElementById('btnSendData').addEventListener('click', () => {
@@ -3106,9 +3129,8 @@ document.getElementById('btnSendData').addEventListener('click', () => {
   if(!center){ alert("Aucune FS sélectionnée."); return; }
   const missing = prioAndPlanMissing(center, currentFsData);
   if(missing.length){
-    alert("Impossible d'envoyer les données : la Priorisation (points forts / à améliorer / recommandations) et le Plan d'action doivent être renseignés.\n\nÉléments manquants :\n- " +
-      missing.join('\n- '));
-    openTab('priorisation');
+    alert("Impossible d'envoyer les données. Éléments manquants :\n- " + missing.join('\n- '));
+    openTab(missing.some(m => m.startsWith('Évaluateurs')) && missing.every(m => m.startsWith('Évaluateurs')) ? 'photos' : 'priorisation');
     return;
   }
   currentFsData.sent = true;
