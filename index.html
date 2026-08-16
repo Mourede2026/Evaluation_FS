@@ -58,13 +58,24 @@ body{margin:0; background:var(--paper); color:var(--ink); font-family:"Segoe UI"
 .sync-indicator.off{background:rgba(217,119,6,.2); color:#ffe4b8;}
 
 header.app{
-  background:linear-gradient(90deg,var(--navy),var(--navy-2)); color:#fff; padding:9px 22px;
-  display:flex; align-items:center; gap:12px; position:sticky; top:0; z-index:50; box-shadow:0 2px 8px rgba(0,0,0,.15);
+  position:sticky; top:0; z-index:50; box-shadow:0 2px 8px rgba(0,0,0,.15);
 }
-header.app .mark{width:28px;height:28px;border-radius:7px;background:var(--teal);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:12px;flex:none;}
-header.app h1{font-size:14.5px;margin:0;font-weight:700;letter-spacing:.2px;}
-header.app .spacer{flex:1;}
-header.app .whoami{font-size:12px; color:#e4eef3; background:rgba(255,255,255,.1); padding:6px 12px; border-radius:20px;}
+.app-title-band{
+  background:#fff; color:var(--navy); padding:10px 22px;
+  display:flex; align-items:center; gap:12px; border-bottom:3px solid var(--teal);
+}
+.app-title-band h1{font-size:14px; margin:0; font-weight:800; letter-spacing:.3px; line-height:1.3; text-transform:uppercase;}
+.app-toolbar-band{
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220' viewBox='0 0 220 220'%3E%3Cg stroke='%23ffffff' stroke-width='1.6' fill='none' opacity='0.16' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='30' cy='30' r='14'/%3E%3Cline x1='40' y1='40' x2='52' y2='52'/%3E%3Cpath d='M150 20 C160 15 172 18 176 28 C182 40 178 50 182 60 C186 72 176 78 178 90 C180 105 168 112 170 128 C172 145 158 150 152 165 C148 175 140 176 136 168 C130 155 136 145 130 135 C124 122 132 112 126 100 C120 88 128 78 122 66 C116 54 124 45 134 38 C140 32 144 24 150 20 Z'/%3E%3Cg transform='translate(110,150)'%3E%3Ccircle cx='0' cy='0' r='10'/%3E%3Cline x1='0' y1='-10' x2='0' y2='-16'/%3E%3Cline x1='0' y1='10' x2='0' y2='16'/%3E%3Cline x1='-10' y1='0' x2='-16' y2='0'/%3E%3Cline x1='10' y1='0' x2='16' y2='0'/%3E%3Cline x1='-7' y1='-7' x2='-11' y2='-11'/%3E%3Cline x1='7' y1='-7' x2='11' y2='-11'/%3E%3Cline x1='-7' y1='7' x2='-11' y2='11'/%3E%3Cline x1='7' y1='7' x2='11' y2='11'/%3E%3C/g%3E%3Cg transform='translate(30,140)'%3E%3Crect x='0' y='4' width='26' height='34' rx='3'/%3E%3Crect x='8' y='0' width='10' height='6' rx='1.5'/%3E%3Cline x1='6' y1='16' x2='20' y2='16'/%3E%3Cline x1='6' y1='22' x2='20' y2='22'/%3E%3Cline x1='6' y1='28' x2='16' y2='28'/%3E%3C/g%3E%3Cpath d='M60 190 h10 l4 -14 l6 22 l5 -30 l5 22 l4 -10 h10'/%3E%3C/g%3E%3C/svg%3E"),
+    linear-gradient(90deg,var(--navy),var(--navy-2));
+  background-repeat: repeat, no-repeat;
+  background-size: 220px 220px, 100% 100%;
+  color:#fff; padding:9px 22px; display:flex; align-items:center; gap:12px;
+}
+header.app .mark{width:28px;height:28px;border-radius:7px;background:var(--teal);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:12px;flex:none;color:#fff;}
+.app-toolbar-band .spacer{flex:1;}
+.app-toolbar-band .whoami{font-size:12px; color:#e4eef3; background:rgba(255,255,255,.15); padding:6px 12px; border-radius:20px;}
 .save-indicator{font-size:11.5px; padding:4px 10px; border-radius:20px; white-space:nowrap;}
 .save-indicator.dirty{background:rgba(217,119,6,.25); color:#ffe4b8;}
 .save-indicator.clean{background:rgba(255,255,255,.1); color:#cfe0ea;}
@@ -76,7 +87,7 @@ header.app .whoami{font-size:12px; color:#e4eef3; background:rgba(255,255,255,.1
 .btn-send{background:#d97706;color:#fff;} .btn-send:hover{filter:brightness(1.06);}
 .btn:disabled{opacity:.5; cursor:not-allowed;}
 
-nav.tabs{display:flex; gap:2px; background:#fff; border-bottom:2px solid var(--line); padding:0 18px; position:sticky; top:47px; z-index:40; overflow-x:auto;}
+nav.tabs{display:flex; gap:2px; background:#fff; border-bottom:2px solid var(--line); padding:0 18px; position:sticky; top:79px; z-index:40; overflow-x:auto;}
 nav.tabs button{border:none; background:transparent; padding:8px 12px; font-size:12.5px; font-weight:600; color:var(--muted); cursor:pointer; border-bottom:3px solid transparent; white-space:nowrap; display:flex; align-items:center; gap:5px;}
 nav.tabs button.active{color:var(--navy-2); border-bottom-color:var(--teal);}
 nav.tabs button:hover{color:var(--navy-2);}
@@ -88,7 +99,10 @@ main{max-width:1260px; margin:0 auto; padding:22px 18px 60px;}
 .panel{display:none;} .panel.active{display:block;}
 
 .card{background:var(--card); border:1px solid var(--line); border-radius:var(--radius); margin-bottom:18px; overflow:hidden;}
-.card h2{margin:0; padding:12px 16px; background:var(--teal-light); color:var(--navy); font-size:14.5px; border-bottom:1px solid var(--line); font-weight:700;}
+.card h2{margin:0; padding:12px 16px; background:var(--teal-light); color:var(--navy); font-size:14.5px; border-bottom:1px solid var(--line); font-weight:700; display:flex; align-items:center; justify-content:space-between; gap:10px;}
+.excel-btn{font-size:11px; font-weight:700; background:#1f7a3d; color:#fff; border:none; border-radius:14px; padding:4px 10px; cursor:pointer; white-space:nowrap; flex:none;}
+.excel-btn:hover{background:#186331;}
+.chart-wrap h3{display:flex; align-items:center; justify-content:space-between; gap:10px;}
 .card .body{padding:16px; overflow-x:auto; -webkit-overflow-scrolling:touch;}
 .card .body>table, .card .body table{min-width:560px;}
 .hint{font-size:12.5px; color:var(--muted); line-height:1.5; margin:0 0 12px;}
@@ -189,12 +203,13 @@ footer{text-align:center; font-size:11.5px; color:var(--muted); padding:20px;}
 /* ---------- MOBILE ---------- */
 @media (max-width:640px){
   :root{font-size:14px;}
-  header.app{flex-wrap:wrap; padding:8px 12px; gap:8px;}
-  header.app h1{flex:1 1 100%; order:-1; font-size:13.5px;}
-  header.app .spacer{display:none;}
-  header.app .whoami{font-size:11px; padding:5px 9px;}
+  .app-title-band{padding:8px 12px; gap:8px;}
+  .app-title-band h1{font-size:11.5px; line-height:1.3;}
+  .app-toolbar-band{flex-wrap:wrap; padding:8px 12px; gap:8px;}
+  .app-toolbar-band .spacer{display:none;}
+  .app-toolbar-band .whoami{font-size:11px; padding:5px 9px;}
   .sync-indicator, .save-indicator{font-size:10.5px; padding:3px 8px;}
-  header.app .btn{padding:7px 10px; font-size:12px;}
+  .app-toolbar-band .btn{padding:7px 10px; font-size:12px;}
   nav.tabs{top:auto; padding:0 8px;}
   main{padding:14px 10px 50px;}
   .card .body{padding:12px;}
@@ -255,20 +270,22 @@ footer{text-align:center; font-size:11.5px; color:var(--muted); padding:20px;}
 </div>
 
 <header class="app">
-  <div class="mark">TD</div>
-  <div>
-    <h1>Outil unifié de collecte — Surveillance des Formations Sanitaires</h1>
+  <div class="app-title-band">
+    <div class="mark">TD</div>
+    <h1>ÉVALUATION DE LA PERFORMANCE DES FORMATIONS SANITAIRES EN SURVEILLANCE ÉPIDÉMIOLOGIQUE</h1>
   </div>
-  <div class="spacer"></div>
-  <span class="whoami" id="whoamiBadge"></span>
-  <span class="sync-indicator" id="syncIndicator"></span>
-  <span class="save-indicator" id="saveIndicator"></span>
-  <button class="btn btn-primary" id="btnSaveNow">💾 Enregistrer</button>
-  <button class="btn btn-ghost" id="btnExportJson">Sauvegarder tout (.json)</button>
-  <button class="btn btn-ghost" id="btnImportJson">Importer (.json)</button>
-  <input type="file" id="fileImport" accept=".json" style="display:none">
-  <button class="btn btn-primary" id="btnExportExcel">Exporter en Excel</button>
-  <button class="btn btn-ghost" id="btnLogout">Déconnexion</button>
+  <div class="app-toolbar-band">
+    <div class="spacer"></div>
+    <span class="whoami" id="whoamiBadge"></span>
+    <span class="sync-indicator" id="syncIndicator"></span>
+    <span class="save-indicator" id="saveIndicator"></span>
+    <button class="btn btn-primary" id="btnSaveNow">💾 Enregistrer</button>
+    <button class="btn btn-ghost" id="btnExportJson">Sauvegarder tout (.json)</button>
+    <button class="btn btn-ghost" id="btnImportJson">Importer (.json)</button>
+    <input type="file" id="fileImport" accept=".json" style="display:none">
+    <button class="btn btn-primary" id="btnExportExcel">Exporter en Excel</button>
+    <button class="btn btn-ghost" id="btnLogout">Déconnexion</button>
+  </div>
 </header>
 
 <nav class="tabs">
@@ -518,7 +535,7 @@ footer{text-align:center; font-size:11.5px; color:var(--muted); padding:20px;}
       </div>
 
       <div class="card">
-        <h2>Synthèse de la performance par domaine — par Commune</h2>
+        <h2>Synthèse de la performance par domaine — par Commune <button type="button" class="excel-btn" id="btnExportChartCommune">📥 Excel</button></h2>
         <div class="body">
           <div class="fs-toolbar" style="margin-bottom:12px;">
             <label style="font-weight:700;font-size:13px;color:var(--navy);">Commune :</label>
@@ -697,11 +714,11 @@ footer{text-align:center; font-size:11.5px; color:var(--muted); padding:20px;}
     <div id="graphNoFs" class="empty-state">Sélectionnez une FS ci-dessus pour voir les graphiques.</div>
     <div id="graphContent" style="display:none;">
       <div class="chart-grid">
-        <div class="chart-wrap"><h3>Synthèse de la performance par domaine — FS en cours</h3><div class="chart-canvas-box"><canvas id="chartDomains"></canvas></div></div>
-        <div class="chart-wrap"><h3>Exactitude des données — discordances (%) — FS en cours</h3><div class="chart-canvas-box"><canvas id="chartExactitude"></canvas></div></div>
+        <div class="chart-wrap"><h3>Synthèse de la performance par domaine — FS en cours <button type="button" class="excel-btn" id="btnExportChartDomains">📥 Excel</button></h3><div class="chart-canvas-box"><canvas id="chartDomains"></canvas></div></div>
+        <div class="chart-wrap"><h3>Exactitude des données — discordances (%) — FS en cours <button type="button" class="excel-btn" id="btnExportChartExactitude">📥 Excel</button></h3><div class="chart-canvas-box"><canvas id="chartExactitude"></canvas></div></div>
       </div>
       <div class="chart-wrap" style="margin-top:18px;">
-        <h3>Comparaison de la performance globale — FS visibles</h3>
+        <h3>Comparaison de la performance globale — FS visibles <button type="button" class="excel-btn" id="btnExportChartCompare">📥 Excel</button></h3>
         <div class="chart-canvas-box"><canvas id="chartCompare"></canvas></div>
       </div>
     </div>
@@ -3440,6 +3457,105 @@ document.getElementById('btnExportExcel').addEventListener('click', () => {
   }
 
   XLSX.writeFile(wb, "Collecte_FS_" + new Date().toISOString().slice(0,10) + ".xlsx");
+});
+
+/* =========================================================================
+   EXPORT EXCEL — PAR TABLEAU ET PAR GRAPHIQUE
+   ========================================================================= */
+function exportAoaToExcel(rows, sheetName, filename){
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  XLSX.utils.book_append_sheet(wb, ws, (sheetName||"Données").slice(0,31));
+  XLSX.writeFile(wb, filename);
+}
+function slugFilename(s){
+  return (s||"tableau").trim().replace(/[^\p{L}\p{N}]+/gu, "_").slice(0,50) || "export";
+}
+// Ajoute automatiquement un bouton « 📥 Excel » sur chaque tableau identifié (id="...")
+// de l'application — un seul export par tableau, aucun besoin de les lister un par un :
+// si une nouvelle table est ajoutée plus tard, elle recevra son bouton automatiquement.
+function attachTableExcelButtons(){
+  document.querySelectorAll('table[id]').forEach(table => {
+    const card = table.closest('.card');
+    const header = card ? card.querySelector('h2') : null;
+    if(!header || header.querySelector('.excel-btn[data-auto]')) return;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'excel-btn';
+    btn.dataset.auto = '1';
+    btn.textContent = '📥 Excel';
+    btn.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      if(!table.querySelector('tbody tr')){ alert("Ce tableau est vide, rien à exporter."); return; }
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.table_to_sheet(table);
+      XLSX.utils.book_append_sheet(wb, ws, "Données");
+      XLSX.writeFile(wb, slugFilename(header.childNodes[0].textContent) + ".xlsx");
+    });
+    header.appendChild(btn);
+  });
+}
+attachTableExcelButtons();
+
+document.getElementById('btnExportChartDomains').addEventListener('click', () => {
+  const center = currentCenter();
+  if(!center){ alert("Aucune FS sélectionnée."); return; }
+  const domainScores = computeDomainScores(center, effInputs(center, currentFsData));
+  const rows = [["Domaine","% de performance","Score obtenu","Score plafond"]];
+  DOMAINS.forEach(d => {
+    const ds = domainScores[d.key];
+    if(ds.na) return;
+    rows.push([d.label, Math.round(pct(ds.score, ds.plafond)*100), ds.score, ds.plafond]);
+  });
+  exportAoaToExcel(rows, "Performance par domaine", `Performance_domaine_${slugFilename(center.name)}.xlsx`);
+});
+document.getElementById('btnExportChartExactitude').addEventListener('click', () => {
+  const center = currentCenter();
+  if(!center){ alert("Aucune FS sélectionnée."); return; }
+  const effSrc = effSources(center, currentFsData);
+  const rows = [["Discordance","%"]];
+  EXACT_DISCORD.forEach(d => {
+    const rowA = effSrc[d.a], rowB = effSrc[d.b];
+    const v = discordance(sourceTotal(rowA), sourceTotal(rowB));
+    rows.push([d.label, v===null ? "" : Math.round(v*100)]);
+  });
+  exportAoaToExcel(rows, "Exactitude", `Exactitude_${slugFilename(center.name)}.xlsx`);
+});
+document.getElementById('btnExportChartCompare').addEventListener('click', () => {
+  const sorted = visibleCenters();
+  if(!sorted.length){ alert("Aucune FS visible à exporter."); return; }
+  const rows = [["FS","Performance globale (%)"]];
+  sorted.forEach(c => {
+    const d = loadFsData(c.id);
+    const total = totalScore(c, effInputs(c, d));
+    const denom = totalPlafond(c);
+    rows.push([c.name, Math.round(pct(total, denom)*100)]);
+  });
+  exportAoaToExcel(rows, "Comparaison FS", "Comparaison_performance_FS.xlsx");
+});
+document.getElementById('btnExportChartCommune').addEventListener('click', () => {
+  const groups = communeGroups();
+  const list = groups[communeChartSelect.value] || [];
+  if(!list.length){ alert("Aucune commune sélectionnée."); return; }
+  const domainAgg = {};
+  DOMAINS.forEach(d => domainAgg[d.key] = {score:0, plafond:0, anyApplicable:false});
+  list.forEach(c => {
+    const d = loadFsData(c.id);
+    const ds = computeDomainScores(c, effInputs(c, d));
+    DOMAINS.forEach(dom => {
+      if(ds[dom.key].na) return;
+      domainAgg[dom.key].anyApplicable = true;
+      domainAgg[dom.key].score += ds[dom.key].score;
+      domainAgg[dom.key].plafond += ds[dom.key].plafond;
+    });
+  });
+  const rows = [["Domaine","% de performance agrégé","Score obtenu","Score plafond"]];
+  DOMAINS.forEach(d => {
+    const a = domainAgg[d.key];
+    if(!a.anyApplicable) return;
+    rows.push([d.label, Math.round(pct(a.score, a.plafond)*100), a.score, a.plafond]);
+  });
+  exportAoaToExcel(rows, "Performance commune", `Performance_domaine_${slugFilename(communeChartSelect.value)}.xlsx`);
 });
 
 /* =========================================================================
