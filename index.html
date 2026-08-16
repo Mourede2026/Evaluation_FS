@@ -385,18 +385,24 @@ footer{text-align:center; font-size:11.5px; color:var(--muted); padding:20px;}
           département/zone) plutôt que collectées sur le terrain. Les valeurs saisies ici sont automatiquement prises
           en compte dans le calcul des scores de chaque FS, et s'affichent en grisé (non modifiables) dans l'Outil 1
           des équipes.</p>
-          <div style="margin-bottom:12px;">
+          <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:12px;">
             <label class="btn btn-outline" style="display:inline-block;">
-              📥 Importer les valeurs pour chaque centre (.xlsx / .csv)
-              <input type="file" id="fileImportOverrides" accept=".xlsx,.xls,.csv" style="display:none">
+              📥 Importer Id 12 (.xlsx / .csv)
+              <input type="file" id="fileImportOverride12" accept=".xlsx,.xls,.csv" style="display:none">
             </label>
-            <p class="hint" style="margin-top:10px;">Format attendu : une colonne <code>FS</code> (nom exact du centre,
-            identique à celui saisi dans « Nommer les centres »), puis pour chaque indicateur une colonne numérateur et
-            une colonne dénominateur, par exemple <code>Id 12 - Numérateur</code>, <code>Id 12 - Dénominateur</code>,
-            <code>Id 19 - Numérateur</code>, <code>Id 19 - Dénominateur</code>, <code>Id 20 - Numérateur</code>,
-            <code>Id 20 - Dénominateur</code>. Les lignes dont le nom de FS ne correspond à aucun centre existant sont
-            ignorées.</p>
+            <label class="btn btn-outline" style="display:inline-block;">
+              📥 Importer Id 19 (.xlsx / .csv)
+              <input type="file" id="fileImportOverride19" accept=".xlsx,.xls,.csv" style="display:none">
+            </label>
+            <label class="btn btn-outline" style="display:inline-block;">
+              📥 Importer Id 20 (.xlsx / .csv)
+              <input type="file" id="fileImportOverride20" accept=".xlsx,.xls,.csv" style="display:none">
+            </label>
           </div>
+          <p class="hint">Chaque bouton importe <strong>un seul indicateur à la fois</strong>. Format attendu (identique
+          pour les 3) : une colonne <code>FS</code> (nom exact du centre), une colonne <code>Numérateur</code> et une
+          colonne <code>Dénominateur</code>. Les lignes dont le nom de FS ne correspond à aucun centre existant sont
+          ignorées et listées après l'import.</p>
           <div style="overflow-x:auto;">
           <table id="overridesTable">
             <thead>
@@ -422,18 +428,24 @@ footer{text-align:center; font-size:11.5px; color:var(--muted); padding:20px;}
           <p class="hint">Le <strong>Rapport hebdomadaire FS transmis au CSE</strong>, la <strong>Base SIMR au CSE</strong>
           et le <strong>DHIS2 au CSE</strong> sont renseignés ici (niveau central) et s'affichent en grisé, pris en compte
           automatiquement dans le calcul des discordances, dans l'Outil 3 des équipes.</p>
-          <div style="margin-bottom:12px;">
+          <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:12px;">
             <label class="btn btn-outline" style="display:inline-block;">
-              📥 Importer les valeurs pour chaque centre (.xlsx / .csv)
-              <input type="file" id="fileImportAdminSrc" accept=".xlsx,.xls,.csv" style="display:none">
+              📥 Importer « Rapport hebdo transmis au CSE » (.xlsx / .csv)
+              <input type="file" id="fileImportSrc2" accept=".xlsx,.xls,.csv" style="display:none">
             </label>
-            <p class="hint" style="margin-top:10px;">Format attendu : une colonne <code>FS</code> (nom exact du centre),
-            puis pour chacune des 3 sources (<code>Rapport hebdo</code>, <code>Base SIMR</code>, <code>DHIS2</code>) les
-            colonnes <code>SIMR</code>, <code>Déc. mat.</code>, <code>Déc. néo.</code>, <code>Déc. ≥5a</code> — par
-            exemple <code>Rapport hebdo - SIMR</code>, <code>Rapport hebdo - Déc. mat.</code>, <code>Base SIMR - SIMR</code>,
-            <code>DHIS2 - Déc. ≥5a</code>, etc. Les colonnes manquantes restent à 0 ; les lignes dont le nom de FS ne
-            correspond à aucun centre existant sont ignorées.</p>
+            <label class="btn btn-outline" style="display:inline-block;">
+              📥 Importer « Base SIMR au CSE » (.xlsx / .csv)
+              <input type="file" id="fileImportSrc3" accept=".xlsx,.xls,.csv" style="display:none">
+            </label>
+            <label class="btn btn-outline" style="display:inline-block;">
+              📥 Importer « DHIS2 au CSE » (.xlsx / .csv)
+              <input type="file" id="fileImportSrc4" accept=".xlsx,.xls,.csv" style="display:none">
+            </label>
           </div>
+          <p class="hint">Chaque bouton importe <strong>une seule source à la fois</strong>. Format attendu (identique
+          pour les 3) : une colonne <code>FS</code> (nom exact du centre), puis les colonnes <code>SIMR</code>,
+          <code>Déc. mat.</code>, <code>Déc. néo.</code>, <code>Déc. ≥5a</code>. Les lignes dont le nom de FS ne
+          correspond à aucun centre existant sont ignorées et listées après l'import.</p>
           <div style="overflow-x:auto;">
           <table id="adminSrcTable">
             <thead>
@@ -2339,56 +2351,54 @@ function renderOverrides(){
 }
 
 /* --- Import en masse des valeurs Id 12 / Id 19 / Id 20 par centre (.xlsx / .csv) --- */
-function findOverrideColumn(headerRow, id, kind){
+function findOverrideColumn(headerRow, kind){
   // kind: 'n' (numérateur) ou 'd' (dénominateur)
   const kindWords = kind === 'n' ? ['numer','num'] : ['denom'];
-  const idxDirect = headerRow.findIndex(h => h === `id ${id} ${kind}`);
-  if(idxDirect !== -1) return idxDirect;
-  return headerRow.findIndex(h => (h.includes(`id ${id}`) || h.includes(`id${id}`)) && kindWords.some(w => h.includes(w)));
+  return headerRow.findIndex(h => kindWords.some(w => h.includes(w)));
 }
-document.getElementById('fileImportOverrides').addEventListener('change', (e) => {
-  const file = e.target.files[0];
-  if(!file) return;
-  readWorkbookRows(file, (err, rows) => {
-    if(err){ alert("Impossible de lire ce fichier : " + err.message); e.target.value = ""; return; }
-    if(!rows.length){ alert("Fichier vide."); e.target.value = ""; return; }
-    const headerRow = rows[0].map(normalizeHeader);
-    const nameIdx = headerRow.findIndex(h => CENTER_COLUMN_ALIASES.name.includes(h));
-    if(nameIdx === -1){ alert("Impossible de trouver une colonne 'FS' dans le fichier."); e.target.value = ""; return; }
-    const colMap = {};
-    ADMIN_CONTROLLED_IDS.forEach(id => {
-      colMap[id] = { n: findOverrideColumn(headerRow, id, 'n'), d: findOverrideColumn(headerRow, id, 'd') };
+// Un seul indicateur importé à la fois : plus simple à préparer côté canevas,
+// et plus fiable (l'ancienne version combinée marquait parfois Id 19/20 comme
+// « renseigné » même sans valeur dans le fichier, à cause d'une variable de
+// suivi partagée entre les 3 indicateurs).
+function attachSingleOverrideImport(inputId, indicatorId){
+  document.getElementById(inputId).addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if(!file) return;
+    readWorkbookRows(file, (err, rows) => {
+      if(err){ alert("Impossible de lire ce fichier : " + err.message); e.target.value = ""; return; }
+      if(!rows.length){ alert("Fichier vide."); e.target.value = ""; return; }
+      const headerRow = rows[0].map(normalizeHeader);
+      const nameIdx = headerRow.findIndex(h => CENTER_COLUMN_ALIASES.name.includes(h));
+      if(nameIdx === -1){ alert("Impossible de trouver une colonne 'FS' dans le fichier."); e.target.value = ""; return; }
+      const nIdx = findOverrideColumn(headerRow, 'n');
+      const dIdx = findOverrideColumn(headerRow, 'd');
+      if(nIdx === -1 && dIdx === -1){ alert("Impossible de trouver une colonne 'Numérateur' ou 'Dénominateur' dans le fichier."); e.target.value = ""; return; }
+      let updated = 0, notFound = [];
+      for(let i=1;i<rows.length;i++){
+        const row = rows[i];
+        if(!row || row.every(v => v===undefined || v===null || v==="")) continue;
+        const name = row[nameIdx] === undefined || row[nameIdx] === null ? "" : String(row[nameIdx]).trim();
+        if(!name) continue;
+        const c = findCenterByName(name);
+        if(!c){ notFound.push(name); continue; }
+        ensureAdminOverrides(c);
+        let rowTouched = false;
+        if(nIdx !== -1 && row[nIdx] !== undefined && row[nIdx] !== ""){ c.adminOverrides[indicatorId].n = parseFloat(row[nIdx]) || 0; rowTouched = true; }
+        if(dIdx !== -1 && row[dIdx] !== undefined && row[dIdx] !== ""){ c.adminOverrides[indicatorId].d = parseFloat(row[dIdx]) || 0; rowTouched = true; }
+        if(rowTouched){ c.overridesTouched[indicatorId] = true; updated++; }
+      }
+      saveCenters(centers);
+      renderOverrides(); renderTracking(); renderAggregates(); renderAllTools();
+      let msg = `${updated} centre(s) mis à jour pour l'Id ${indicatorId}.`;
+      if(notFound.length) msg += `\n\nNon trouvé(s) (nom de FS ne correspondant à aucun centre existant) :\n- ${notFound.join('\n- ')}`;
+      alert(msg);
+      e.target.value = "";
     });
-    let updated = 0, notFound = [];
-    for(let i=1;i<rows.length;i++){
-      const row = rows[i];
-      if(!row || row.every(v => v===undefined || v===null || v==="")) continue;
-      const name = row[nameIdx] === undefined || row[nameIdx] === null ? "" : String(row[nameIdx]).trim();
-      if(!name) continue;
-      const c = findCenterByName(name);
-      if(!c){ notFound.push(name); continue; }
-      ensureAdminOverrides(c);
-      let touched = false;
-      ADMIN_CONTROLLED_IDS.forEach(id => {
-        const {n:nIdx, d:dIdx} = colMap[id];
-        if(nIdx !== -1 && nIdx !== undefined && row[nIdx] !== undefined && row[nIdx] !== ""){
-          c.adminOverrides[id].n = parseFloat(row[nIdx]) || 0; touched = true;
-        }
-        if(dIdx !== -1 && dIdx !== undefined && row[dIdx] !== undefined && row[dIdx] !== ""){
-          c.adminOverrides[id].d = parseFloat(row[dIdx]) || 0; touched = true;
-        }
-        if(touched) c.overridesTouched[id] = true;
-      });
-      if(touched) updated++;
-    }
-    saveCenters(centers);
-    renderOverrides(); renderTracking(); renderAggregates(); renderAllTools();
-    let msg = `${updated} centre(s) mis à jour.`;
-    if(notFound.length) msg += `\n\nNon trouvé(s) (nom de FS ne correspondant à aucun centre existant) :\n- ${notFound.join('\n- ')}`;
-    alert(msg);
-    e.target.value = "";
   });
-});
+}
+attachSingleOverrideImport('fileImportOverride12', 12);
+attachSingleOverrideImport('fileImportOverride19', 19);
+attachSingleOverrideImport('fileImportOverride20', 20);
 
 /* --- Outil 3 : sources centralisées par l'administrateur (Rapport CSE, Base SIMR, DHIS2) --- */
 const adminSrcBody = document.getElementById('adminSrcBody');
@@ -2420,14 +2430,7 @@ function renderAdminSrc(){
   });
 }
 
-/* --- Import en masse des sources Outil 3 (Rapport hebdo / Base SIMR / DHIS2) par centre (.xlsx / .csv) --- */
-function detectSrcGroup(headerRaw){
-  const h = (headerRaw||"").replace(/[^a-z0-9]/g,'');
-  if(h.includes('hebdo')) return 2;   // Rapport hebdomadaire FS transmis au CSE
-  if(h.includes('dhis')) return 4;    // DHIS2 au CSE
-  if(h.includes('simr')) return 3;    // Base SIMR au CSE
-  return null;
-}
+/* --- Import en masse des sources Outil 3 (une source à la fois : Rapport hebdo, Base SIMR, DHIS2) --- */
 function detectSrcField(headerRaw){
   const h = (headerRaw||"").replace(/[^a-z0-9]/g,'');
   if(h.includes('neo')) return 'dcn';           // Déc. néo.
@@ -2436,54 +2439,57 @@ function detectSrcField(headerRaw){
   if(h.includes('simr')) return 'simr';
   return null;
 }
-document.getElementById('fileImportAdminSrc').addEventListener('change', (e) => {
-  const file = e.target.files[0];
-  if(!file) return;
-  readWorkbookRows(file, (err, rows) => {
-    if(err){ alert("Impossible de lire ce fichier : " + err.message); e.target.value = ""; return; }
-    if(!rows.length){ alert("Fichier vide."); e.target.value = ""; return; }
-    const headerRow = rows[0].map(normalizeHeader);
-    const nameIdx = headerRow.findIndex(h => CENTER_COLUMN_ALIASES.name.includes(h));
-    if(nameIdx === -1){ alert("Impossible de trouver une colonne 'FS' dans le fichier."); e.target.value = ""; return; }
-    const colMap = {}; // {idx: {field: colIndex}}
-    ADMIN_CONTROLLED_SRC_IDX.forEach(idx => colMap[idx] = {});
-    headerRow.forEach((h, j) => {
-      if(j === nameIdx) return;
-      const grp = detectSrcGroup(h), field = detectSrcField(h);
-      if(grp !== null && field !== null && ADMIN_CONTROLLED_SRC_IDX.includes(grp)){
-        colMap[grp][field] = j;
-      }
-    });
-    let updated = 0, notFound = [];
-    for(let i=1;i<rows.length;i++){
-      const row = rows[i];
-      if(!row || row.every(v => v===undefined || v===null || v==="")) continue;
-      const name = row[nameIdx] === undefined || row[nameIdx] === null ? "" : String(row[nameIdx]).trim();
-      if(!name) continue;
-      const c = findCenterByName(name);
-      if(!c){ notFound.push(name); continue; }
-      ensureAdminSources(c);
-      let touched = false;
-      ADMIN_CONTROLLED_SRC_IDX.forEach(idx => {
+// Une seule source importée à la fois (au lieu des 3 dans un seul fichier) :
+// plus simple à préparer, et corrige un bug où la 2e/3e source d'une même ligne
+// pouvait être marquée « renseignée » même sans valeur dans le fichier.
+function attachSingleSrcImport(inputId, srcIdx, srcLabel){
+  document.getElementById(inputId).addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if(!file) return;
+    readWorkbookRows(file, (err, rows) => {
+      if(err){ alert("Impossible de lire ce fichier : " + err.message); e.target.value = ""; return; }
+      if(!rows.length){ alert("Fichier vide."); e.target.value = ""; return; }
+      const headerRow = rows[0].map(normalizeHeader);
+      const nameIdx = headerRow.findIndex(h => CENTER_COLUMN_ALIASES.name.includes(h));
+      if(nameIdx === -1){ alert("Impossible de trouver une colonne 'FS' dans le fichier."); e.target.value = ""; return; }
+      const fieldIdx = {};
+      headerRow.forEach((h, j) => {
+        if(j === nameIdx) return;
+        const f = detectSrcField(h);
+        if(f && fieldIdx[f] === undefined) fieldIdx[f] = j;
+      });
+      if(Object.keys(fieldIdx).length === 0){ alert("Impossible de trouver les colonnes SIMR / Déc. mat. / Déc. néo. / Déc. ≥5a dans le fichier."); e.target.value = ""; return; }
+      let updated = 0, notFound = [];
+      for(let i=1;i<rows.length;i++){
+        const row = rows[i];
+        if(!row || row.every(v => v===undefined || v===null || v==="")) continue;
+        const name = row[nameIdx] === undefined || row[nameIdx] === null ? "" : String(row[nameIdx]).trim();
+        if(!name) continue;
+        const c = findCenterByName(name);
+        if(!c){ notFound.push(name); continue; }
+        ensureAdminSources(c);
+        let rowTouched = false;
         ADMIN_SRC_FIELDS.forEach(f => {
-          const j = colMap[idx][f];
+          const j = fieldIdx[f];
           if(j !== undefined && row[j] !== undefined && row[j] !== ""){
-            c.adminSources[idx][f] = parseFloat(row[j]) || 0;
-            touched = true;
+            c.adminSources[srcIdx][f] = parseFloat(row[j]) || 0;
+            rowTouched = true;
           }
         });
-        if(touched) c.adminSourcesTouched[idx] = true;
-      });
-      if(touched) updated++;
-    }
-    saveCenters(centers);
-    renderAdminSrc(); renderTracking(); renderAggregates(); renderAllTools();
-    let msg = `${updated} centre(s) mis à jour.`;
-    if(notFound.length) msg += `\n\nNon trouvé(s) (nom de FS ne correspondant à aucun centre existant) :\n- ${notFound.join('\n- ')}`;
-    alert(msg);
-    e.target.value = "";
+        if(rowTouched){ c.adminSourcesTouched[srcIdx] = true; updated++; }
+      }
+      saveCenters(centers);
+      renderAdminSrc(); renderTracking(); renderAggregates(); renderAllTools();
+      let msg = `${updated} centre(s) mis à jour pour « ${srcLabel} ».`;
+      if(notFound.length) msg += `\n\nNon trouvé(s) (nom de FS ne correspondant à aucun centre existant) :\n- ${notFound.join('\n- ')}`;
+      alert(msg);
+      e.target.value = "";
+    });
   });
-});
+}
+attachSingleSrcImport('fileImportSrc2', 2, 'Rapport hebdo transmis au CSE');
+attachSingleSrcImport('fileImportSrc3', 3, 'Base SIMR au CSE');
+attachSingleSrcImport('fileImportSrc4', 4, 'DHIS2 au CSE');
 
 /* =========================================================================
    SÉLECTEUR DE FS
