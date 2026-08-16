@@ -146,6 +146,7 @@ table.admin-table th, table.admin-table td{font-size:12px;}
 
 .domain-block{border:1px solid var(--line); border-radius:var(--radius); margin-bottom:16px; overflow:hidden;}
 .domain-block .dh{background:var(--navy); color:#fff; padding:10px 14px; font-weight:700; font-size:13px;}
+td.dh{background:var(--navy); color:#fff; padding:9px 12px; font-weight:700; font-size:12.5px;}
 .synth-grid{display:grid; grid-template-columns:1fr 1fr 1fr; gap:0;}
 .synth-col{padding:10px 12px; border-right:1px solid var(--line);}
 .synth-col:last-child{border-right:none;}
@@ -439,6 +440,24 @@ footer{text-align:center; font-size:11.5px; color:var(--muted); padding:20px;}
         </div>
       </div>
 
+      <div class="card" style="border-color:#e2b3ac;">
+        <h2 style="background:#fbeceb; color:#8a2e22;">⚠ Zone sensible — Réinitialisation</h2>
+        <div class="body">
+          <p class="hint">Ces actions sont <strong>irréversibles</strong> sur cet appareil (et se propagent à tous les
+          appareils synchronisés dès leur prochaine connexion). Une confirmation par mot de passe administrateur est demandée.</p>
+          <div style="display:flex; gap:12px; flex-wrap:wrap;">
+            <button class="btn btn-outline" id="btnResetCollectedData" style="border-color:#c0392b; color:#c0392b;">🗑️ Réinitialiser les données collectées</button>
+            <button class="btn btn-outline" id="btnResetParams" style="border-color:#c0392b; color:#c0392b;">🗑️ Réinitialiser les paramètres administrateur</button>
+          </div>
+          <p class="hint" style="margin-top:10px;">
+            <strong>Données collectées</strong> : remet à zéro, pour toutes les FS, les Outils 1/2/3, la Priorisation,
+            le Plan d'action, les Évaluateurs et les Photos. La liste des FS, des comptes et des paramètres admin est conservée.<br>
+            <strong>Paramètres administrateur</strong> : remet à zéro uniquement les valeurs saisies par l'administrateur
+            (indicateurs Id 12/19/20 et les 3 sources centralisées de l'Outil 3), pour toutes les FS.
+          </p>
+        </div>
+      </div>
+
       <div class="card">
         <h2>Suivi de la collecte — toutes les FS</h2>
         <div class="body">
@@ -471,12 +490,44 @@ footer{text-align:center; font-size:11.5px; color:var(--muted); padding:20px;}
       </div>
 
       <div class="card">
+        <h2>Synthèse de la performance par domaine — par Commune</h2>
+        <div class="body">
+          <div class="fs-toolbar" style="margin-bottom:12px;">
+            <label style="font-weight:700;font-size:13px;color:var(--navy);">Commune :</label>
+            <select id="communeChartSelect"></select>
+          </div>
+          <div id="communeChartEmpty" class="empty-state">Aucune FS avec commune renseignée.</div>
+          <div class="chart-wrap" id="communeChartWrap" style="display:none;"><div class="chart-canvas-box"><canvas id="chartCommune"></canvas></div></div>
+        </div>
+      </div>
+
+      <div class="card">
         <h2>Vue d'ensemble par Zone sanitaire</h2>
         <div class="body" style="overflow-x:auto;">
           <table id="zsTable">
             <thead><tr><th>Zone sanitaire</th><th class="center">Nb FS</th><th class="center">Performance moyenne</th><th class="center">Données envoyées</th></tr></thead>
             <tbody id="zsBody"></tbody>
           </table>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Priorisation des indicateurs — par Zone sanitaire</h2>
+        <div class="body">
+          <div class="fs-toolbar" style="margin-bottom:12px;">
+            <label style="font-weight:700;font-size:13px;color:var(--navy);">Zone sanitaire :</label>
+            <select id="zonePrioSelect"></select>
+          </div>
+          <p class="hint">Score agrégé (somme) de toutes les FS de la zone sélectionnée. Code couleur : <span class="rag-red" style="padding:2px 8px;border-radius:4px;">Rouge</span> si &lt; 50%,
+          <span class="rag-yellow" style="padding:2px 8px;border-radius:4px;">Jaune</span> si entre 50% et 85%,
+          <span class="rag-green" style="padding:2px 8px;border-radius:4px;">Vert</span> si ≥ 85%.</p>
+          <div id="zonePrioEmpty" class="empty-state">Aucune FS avec zone sanitaire renseignée.</div>
+          <div style="overflow-x:auto;">
+          <table id="zonePrioTable" style="display:none;">
+            <thead><tr><th class="xsmall-col center">N°</th><th>Intitulé de l'indicateur</th><th class="small-col center">Score obtenu / plafond</th><th class="small-col center">% atteint</th><th class="small-col center">Statut</th></tr></thead>
+            <tbody id="zonePrioBody"></tbody>
+          </table>
+          </div>
         </div>
       </div>
     </div>
@@ -616,7 +667,7 @@ footer{text-align:center; font-size:11.5px; color:var(--muted); padding:20px;}
     <div id="graphNoFs" class="empty-state">Sélectionnez une FS ci-dessus pour voir les graphiques.</div>
     <div id="graphContent" style="display:none;">
       <div class="chart-grid">
-        <div class="chart-wrap"><h3>Performance par domaine — FS en cours</h3><div class="chart-canvas-box"><canvas id="chartDomains"></canvas></div></div>
+        <div class="chart-wrap"><h3>Synthèse de la performance par domaine — FS en cours</h3><div class="chart-canvas-box"><canvas id="chartDomains"></canvas></div></div>
         <div class="chart-wrap"><h3>Exactitude des données — discordances (%) — FS en cours</h3><div class="chart-canvas-box"><canvas id="chartExactitude"></canvas></div></div>
       </div>
       <div class="chart-wrap" style="margin-top:18px;">
@@ -736,7 +787,8 @@ const DOMAINS = [
 ];
 
 const NA_INDICATORS_BY_TYPE = {
-  "Privée":  [1,2,3,4,5,6,7,8,9,29],
+  "Publique": [16, 17, 18, 28],
+  "Privée":  [1,2,3,4,5,6,7,8,9,29, 11,13,27,32],
   "Hôpital": [1,2,3,4,5,6,7,8,9,29],
 };
 
@@ -1143,8 +1195,13 @@ function applyRemoteFsRows(tables){
   });
 }
 
-async function pullFromBackend(){
+async function pullFromBackend(force){
   if(!backendConfigured()) return;
+  // Pendant que l'administrateur est sur sa page, on ne reçoit plus les mises à jour
+  // automatiquement : ça évite que sa saisie en cours soit écrasée ou que l'affichage
+  // se rafraîchisse sous ses yeux. La synchronisation reprend quand il clique sur
+  // « Enregistrer » (force=true) ou qu'il quitte la page Administrateur.
+  if(adminEditMode && !force) return;
   try{
     const since = localStorage.getItem(LS_LAST_SYNC) || "0";
     const auth = authParams();
@@ -1258,22 +1315,29 @@ function saveFsData(centerId, data){
    60 secondes, ou immédiatement via le bouton « Enregistrer », ou lors d'un
    changement de FS / déconnexion / fermeture de page.
    ========================================================================= */
-let dirtyFs = false, dirtyCenters = false, dirtyUsers = false;
+let dirtyFs = false, dirtyCenters = false, dirtyUsers = false, dirtyZsManagers = false;
 let lastSavedAt = null;
-const AUTOSAVE_INTERVAL_MS = 60000;
+// Saisie des équipes (Outils 1/2/3, etc.) : sauvegarde locale automatique toutes les 20s,
+// pour ne rien perdre si la page se ferme avant un enregistrement manuel.
+const AUTOSAVE_INTERVAL_MS = 20000;
+// Page Administrateur : AUCUNE sauvegarde ni synchronisation automatique — voir plus bas
+// (adminEditMode) — seul le bouton « Enregistrer » déclenche l'écriture + la synchronisation.
+let adminEditMode = false;
 
 function markFsDirty(){ dirtyFs = true; updateSaveIndicator(); }
 function markCentersDirty(){ dirtyCenters = true; updateSaveIndicator(); }
 function markUsersDirty(){ dirtyUsers = true; updateSaveIndicator(); }
+function markZsManagersDirty(){ dirtyZsManagers = true; updateSaveIndicator(); }
 
 function flushSaves(){
   if(dirtyFs && currentCenterId){ saveFsData(currentCenterId, currentFsData); dirtyFs = false; }
   if(dirtyCenters){ saveCenters(centers); dirtyCenters = false; }
   if(dirtyUsers){ saveUsers(users); dirtyUsers = false; }
+  if(dirtyZsManagers){ saveZsManagers(zsManagers); dirtyZsManagers = false; }
   lastSavedAt = new Date();
   updateSaveIndicator();
 }
-function hasUnsavedChanges(){ return dirtyFs || dirtyCenters || dirtyUsers; }
+function hasUnsavedChanges(){ return dirtyFs || dirtyCenters || dirtyUsers || dirtyZsManagers; }
 
 function updateSaveIndicator(){
   const el = document.getElementById('saveIndicator');
@@ -1290,7 +1354,11 @@ function updateSaveIndicator(){
   }
 }
 
-setInterval(() => { if(hasUnsavedChanges()) flushSaves(); }, AUTOSAVE_INTERVAL_MS);
+// Autosave automatique périodique : uniquement la saisie de terrain (FS en cours),
+// jamais les données admin (qui n'attendent que le clic « Enregistrer »).
+setInterval(() => { if(dirtyFs && currentCenterId){ saveFsData(currentCenterId, currentFsData); dirtyFs = false; lastSavedAt = new Date(); updateSaveIndicator(); } }, AUTOSAVE_INTERVAL_MS);
+// Filet de sécurité à la fermeture : on sauvegarde tout ce qui reste en attente
+// (y compris les données admin) pour ne rien perdre si l'onglet se ferme.
 window.addEventListener('beforeunload', (e) => {
   if(hasUnsavedChanges()){
     flushSaves();
@@ -1578,8 +1646,12 @@ document.getElementById('btnLogout').addEventListener('click', () => {
   sessionStorage.removeItem(SS_SESSION);
   location.reload();
 });
-document.getElementById('btnSaveNow').addEventListener('click', () => {
+document.getElementById('btnSaveNow').addEventListener('click', async () => {
   flushSaves();
+  if(adminEditMode){
+    await pullFromBackend(true);
+    renderAdmin(); renderUsers(); renderTracking(); renderAggregates(); renderOverrides(); renderAdminSrc(); renderZsManagers();
+  }
 });
 
 function startSession(role, userId){
@@ -1665,17 +1737,16 @@ function renderAdmin(){
         const field = inp.dataset.field;
         if(field === 'zone' && ROLE === 'zsmanager') return; // verrouillé
         c[field] = field === 'order' ? (parseInt(inp.value)||1) : inp.value;
-        saveCenters(centers);
-        refreshFsSelect(); renderAllTools(); renderTracking(); renderAggregates(); renderOverrides(); renderAdminSrc(); renderUsers();
+        markCentersDirty();
       });
     });
     tr.querySelector('.icon-btn').addEventListener('click', () => {
-      if(!confirm(`Supprimer "${c.name}" et toutes ses données de collecte ?`)) return;
+      if(!confirm(`Supprimer "${c.name}" et toutes ses données de collecte ? (l'action sera synchronisée au prochain clic sur « Enregistrer »)`)) return;
       localStorage.removeItem(LS_DATA_PREFIX + c.id);
       centers = centers.filter(x => x.id !== c.id);
-      saveCenters(centers);
+      markCentersDirty();
       users.forEach(u => { u.centerIds = (u.centerIds||[]).filter(id=>id!==c.id); });
-      saveUsers(users);
+      markUsersDirty();
       if(currentCenterId === c.id){
         const vc = visibleCenters();
         currentCenterId = vc.length ? vc[0].id : null;
@@ -1694,7 +1765,7 @@ document.getElementById('btnAddCenter').addEventListener('click', () => {
   const zoneVal = ROLE === 'zsmanager' && CURRENT_ZSMANAGER ? CURRENT_ZSMANAGER.zone : "";
   const c = {id: uid(), order:maxOrder+1, name:`FS${maxOrder+1}`, type:"Publique", departement:"", zone:zoneVal, commune:"", date:""};
   ensureAdminOverrides(c); ensureAdminSources(c);
-  centers.push(c); saveCenters(centers);
+  centers.push(c); markCentersDirty();
   if(!currentCenterId){ currentCenterId = c.id; currentFsData = loadFsData(c.id); }
   renderAdmin(); refreshFsSelect(); renderAllTools(); renderTracking(); renderAggregates(); renderOverrides(); renderAdminSrc(); renderUsers();
 });
@@ -1807,12 +1878,12 @@ function renderZsManagers(){
       <td class="center"><button class="icon-btn" title="Supprimer">✕</button></td>
     `;
     tr.querySelectorAll('input').forEach(inp => {
-      inp.addEventListener('input', () => { z[inp.dataset.zfield] = inp.value; saveZsManagers(zsManagers); });
+      inp.addEventListener('input', () => { z[inp.dataset.zfield] = inp.value; markZsManagersDirty(); });
     });
     tr.querySelector('.icon-btn').addEventListener('click', () => {
-      if(!confirm(`Supprimer le compte gestionnaire de "${z.zone}" ?`)) return;
+      if(!confirm(`Supprimer le compte gestionnaire de "${z.zone}" ? (synchronisé au prochain « Enregistrer »)`)) return;
       zsManagers = zsManagers.filter(x=>x.id!==z.id);
-      saveZsManagers(zsManagers);
+      markZsManagersDirty();
       renderZsManagers();
     });
     zsManagersBody.appendChild(tr);
@@ -1821,7 +1892,7 @@ function renderZsManagers(){
 document.getElementById('btnAddZsManager').addEventListener('click', () => {
   const n = zsManagers.length + 1;
   const z = { id: uidZ(), zone: `Zone ${n}`, username: `zone${n}`, password: Math.random().toString(36).slice(2,8) };
-  zsManagers.push(z); saveZsManagers(zsManagers);
+  zsManagers.push(z); markZsManagersDirty();
   renderZsManagers();
 });
 
@@ -1893,20 +1964,20 @@ function renderUsers(){
       <td class="center"><button class="icon-btn" title="Supprimer">✕</button></td>
     `;
     tr.querySelectorAll('input[data-ufield]').forEach(inp => {
-      inp.addEventListener('input', () => { u[inp.dataset.ufield] = inp.value; saveUsers(users); });
+      inp.addEventListener('input', () => { u[inp.dataset.ufield] = inp.value; markUsersDirty(); });
     });
     tr.querySelectorAll('input[data-ucheck]').forEach(chk => {
       chk.addEventListener('change', () => {
         const set = new Set(u.centerIds || []);
         if(chk.checked) set.add(chk.value); else set.delete(chk.value);
         u.centerIds = Array.from(set);
-        saveUsers(users);
+        markUsersDirty();
       });
     });
     tr.querySelector('.icon-btn').addEventListener('click', () => {
-      if(!confirm(`Supprimer le compte de l'équipe "${u.teamName}" ?`)) return;
+      if(!confirm(`Supprimer le compte de l'équipe "${u.teamName}" ? (synchronisé au prochain « Enregistrer »)`)) return;
       users = users.filter(x=>x.id!==u.id);
-      saveUsers(users);
+      markUsersDirty();
       renderUsers();
     });
     usersBody.appendChild(tr);
@@ -1916,7 +1987,7 @@ document.getElementById('btnAddUser').addEventListener('click', () => {
   const n = users.length + 1;
   const createdByZone = ROLE === 'zsmanager' && CURRENT_ZSMANAGER ? CURRENT_ZSMANAGER.zone : null;
   const u = { id: uidU(), teamName: `Équipe ${n}`, username: `equipe${n}`, password: Math.random().toString(36).slice(2,8), centerIds: [], createdByZone };
-  users.push(u); saveUsers(users);
+  users.push(u); markUsersDirty();
   renderUsers();
 });
 
@@ -2011,7 +2082,151 @@ function renderAggregates(){
   }
   renderGroup(communeBody, 'commune');
   renderGroup(zsBody, 'zone');
+  renderCommuneChart();
+  renderZonePrio();
 }
+
+/* --- Radar de performance par domaine, agrégé par Commune (vue admin) --- */
+const communeChartSelect = document.getElementById('communeChartSelect');
+function communeGroups(){
+  const groups = {};
+  visibleCenters().forEach(c => {
+    const key = (c.commune || '').trim();
+    if(!key) return;
+    if(!groups[key]) groups[key] = [];
+    groups[key].push(c);
+  });
+  return groups;
+}
+function renderCommuneChart(){
+  if(!hasAdminAccess()) return;
+  const groups = communeGroups();
+  const names = Object.keys(groups).sort();
+  const prevVal = communeChartSelect.value;
+  communeChartSelect.innerHTML = names.map(n => `<option value="${escapeAttr(n)}">${escapeHtml(n)} (${groups[n].length} FS)</option>`).join('');
+  if(names.length){
+    communeChartSelect.value = names.includes(prevVal) ? prevVal : names[0];
+  }
+  const empty = document.getElementById('communeChartEmpty');
+  const wrap = document.getElementById('communeChartWrap');
+  if(!names.length){ empty.style.display=""; wrap.style.display="none"; return; }
+  empty.style.display = "none"; wrap.style.display = "";
+
+  const list = groups[communeChartSelect.value] || [];
+  try{
+    // Agrège score/plafond par domaine sur toutes les FS de la commune sélectionnée
+    const domainAgg = {};
+    DOMAINS.forEach(d => domainAgg[d.key] = {score:0, plafond:0, anyApplicable:false});
+    list.forEach(c => {
+      const d = loadFsData(c.id);
+      const ds = computeDomainScores(c, effInputs(c, d));
+      DOMAINS.forEach(dom => {
+        if(ds[dom.key].na) return;
+        domainAgg[dom.key].anyApplicable = true;
+        domainAgg[dom.key].score += ds[dom.key].score;
+        domainAgg[dom.key].plafond += ds[dom.key].plafond;
+      });
+    });
+    const applicableDomains = DOMAINS.filter(d => domainAgg[d.key].anyApplicable);
+    const ctx = document.getElementById('chartCommune').getContext('2d');
+    const data = { labels: applicableDomains.map(d => d.label),
+      datasets:[{ label: communeChartSelect.value, data: applicableDomains.map(d => Math.round(pct(domainAgg[d.key].score, domainAgg[d.key].plafond)*100)),
+        backgroundColor:'rgba(31,78,120,0.28)', borderColor:'#1f4e78', borderWidth:2, pointBackgroundColor:'#1f4e78', pointRadius:3 }] };
+    if(chartCommuneInst) chartCommuneInst.destroy();
+    chartCommuneInst = new Chart(ctx, { type:'radar', data,
+      options:{ responsive:true, maintainAspectRatio:false,
+        scales:{ r:{ min:0, max:100, ticks:{ stepSize:20, callback:v=>v+'%', backdropColor:'transparent' }, pointLabels:{font:{size:10.5}} } },
+        plugins:{ legend:{display:false}, tooltip:{callbacks:{label:c=>c.parsed.r+'%'}} } } });
+  }catch(err){ console.error('Graphique commune :', err); }
+}
+communeChartSelect.addEventListener('change', renderCommuneChart);
+
+/* --- Priorisation des indicateurs agrégée par Zone sanitaire (vue admin) --- */
+const zonePrioSelect = document.getElementById('zonePrioSelect');
+function zoneGroups(){
+  const groups = {};
+  visibleCenters().forEach(c => {
+    const key = (c.zone || '').trim();
+    if(!key) return;
+    if(!groups[key]) groups[key] = [];
+    groups[key].push(c);
+  });
+  return groups;
+}
+function renderZonePrio(){
+  if(!hasAdminAccess()) return;
+  const groups = zoneGroups();
+  const names = Object.keys(groups).sort();
+  const prevVal = zonePrioSelect.value;
+  zonePrioSelect.innerHTML = names.map(n => `<option value="${escapeAttr(n)}">${escapeHtml(n)} (${groups[n].length} FS)</option>`).join('');
+  if(names.length){
+    zonePrioSelect.value = names.includes(prevVal) ? prevVal : names[0];
+  }
+  const empty = document.getElementById('zonePrioEmpty');
+  const table = document.getElementById('zonePrioTable');
+  if(!names.length){ empty.style.display=""; table.style.display="none"; return; }
+  empty.style.display = "none"; table.style.display = "";
+
+  const list = groups[zonePrioSelect.value] || [];
+  const zonePrioBody = document.getElementById('zonePrioBody');
+  zonePrioBody.innerHTML = "";
+  // Agrège score/plafond par indicateur sur toutes les FS de la zone, regroupé par domaine
+  DOMAINS.forEach(d => {
+    const inds = INDICATORS.filter(i => i.domain === d.key);
+    const applicableInds = inds.filter(ind => list.some(c => indicatorApplicable(c, ind)));
+    if(!applicableInds.length) return;
+    const headRow = document.createElement('tr');
+    headRow.innerHTML = `<td colspan="5" class="dh">${escapeHtml(d.label)}</td>`;
+    zonePrioBody.appendChild(headRow);
+    applicableInds.forEach(ind => {
+      let sc = 0, plafond = 0;
+      list.forEach(c => {
+        if(!indicatorApplicable(c, ind)) return;
+        const d2 = loadFsData(c.id);
+        const inp = effInputs(c, d2)[ind.id];
+        sc += scoreFor(ind, inp);
+        plafond += ind.plafond;
+      });
+      const frac = plafond ? sc/plafond : 0;
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td class="center">Id ${ind.id}</td><td>${ind.label}</td>
+        <td class="center">${sc} / ${plafond}</td><td class="center">${fmtPct(frac)}</td>
+        <td class="${ragClass(frac)}">${ragLabel(frac)}</td>`;
+      zonePrioBody.appendChild(tr);
+    });
+  });
+}
+zonePrioSelect.addEventListener('change', renderZonePrio);
+
+/* --- Réinitialisation (admin) --- */
+document.getElementById('btnResetCollectedData').addEventListener('click', () => {
+  const pass = prompt("Confirmez avec le mot de passe administrateur pour réinitialiser TOUTES les données collectées (Outils 1/2/3, Priorisation, Plan, Évaluateurs, Photos) de TOUTES les FS :");
+  if(pass === null) return;
+  if(pass !== getAdminPass()){ alert("Mot de passe incorrect. Réinitialisation annulée."); return; }
+  if(!confirm("Dernière confirmation : cette action est irréversible. Continuer ?")) return;
+  centers.forEach(c => {
+    const fresh = defaultFsData();
+    saveFsData(c.id, fresh);
+    if(c.id === currentCenterId) currentFsData = fresh;
+  });
+  alert("Toutes les données collectées ont été réinitialisées.");
+  renderAllTools(); renderTracking(); renderAggregates();
+});
+document.getElementById('btnResetParams').addEventListener('click', () => {
+  const pass = prompt("Confirmez avec le mot de passe administrateur pour réinitialiser les PARAMÈTRES ADMINISTRATEUR (Id 12/19/20 et les 3 sources centralisées de l'Outil 3) de TOUTES les FS :");
+  if(pass === null) return;
+  if(pass !== getAdminPass()){ alert("Mot de passe incorrect. Réinitialisation annulée."); return; }
+  if(!confirm("Dernière confirmation : cette action est irréversible. Continuer ?")) return;
+  centers.forEach(c => {
+    c.adminOverrides = Object.fromEntries(ADMIN_CONTROLLED_IDS.map(id => [id, {n:0, d:0}]));
+    c.overridesTouched = {};
+    c.adminSources = Object.fromEntries(ADMIN_CONTROLLED_SRC_IDX.map(idx => [idx, {simr:0, dcm:0, dcn:0, d5:0}]));
+    c.adminSourcesTouched = {};
+  });
+  saveCenters(centers);
+  alert("Les paramètres administrateur ont été réinitialisés pour toutes les FS.");
+  renderAllTools(); renderOverrides(); renderAdminSrc();
+});
 
 /* --- Données centralisées par l'administrateur (Id 12, 19, 20) --- */
 const overridesBody = document.getElementById('overridesBody');
@@ -2037,9 +2252,7 @@ function renderOverrides(){
       ensureAdminOverrides(c);
       c.adminOverrides[inp.dataset.ovId][inp.dataset.ovField] = inp.value === "" ? 0 : parseFloat(inp.value);
       c.overridesTouched[inp.dataset.ovId] = true;
-      saveCenters(centers);
-      renderTracking(); renderAggregates();
-      if(currentCenterId === c.id) renderAllTools();
+      markCentersDirty();
     });
   });
 }
@@ -2121,9 +2334,7 @@ function renderAdminSrc(){
       ensureAdminSources(c);
       c.adminSources[inp.dataset.asIdx][inp.dataset.asField] = inp.value === "" ? 0 : parseFloat(inp.value);
       c.adminSourcesTouched[inp.dataset.asIdx] = true;
-      saveCenters(centers);
-      renderTracking(); renderAggregates();
-      if(currentCenterId === c.id) renderAllTools();
+      markCentersDirty();
     });
   });
 }
@@ -2507,7 +2718,7 @@ function renderOutil3Discord(){
 /* =========================================================================
    GRAPHIQUES
    ========================================================================= */
-let chartDomainsInst=null, chartExactitudeInst=null, chartCompareInst=null;
+let chartDomainsInst=null, chartExactitudeInst=null, chartCompareInst=null, chartCommuneInst=null;
 
 function renderCharts(){
   const has = !!currentCenterId;
@@ -2516,48 +2727,61 @@ function renderCharts(){
   if(!has) return;
   const center = currentCenter();
 
-  const domainScores = computeDomainScores(center, effInputs(center, currentFsData));
-  const applicableDomains = DOMAINS.filter(d => !domainScores[d.key].na);
-  const ctx1 = document.getElementById('chartDomains').getContext('2d');
-  const data1 = {
-    labels: applicableDomains.map(d => d.label.length>28? d.label.slice(0,26)+'…' : d.label),
-    datasets: [{ label:'% de performance', data: applicableDomains.map(d => Math.round(pct(domainScores[d.key].score, domainScores[d.key].plafond)*100)),
-      backgroundColor: '#1b8a7a', borderRadius:4 }]
-  };
-  if(chartDomainsInst) chartDomainsInst.destroy();
-  chartDomainsInst = new Chart(ctx1, { type:'bar', data:data1,
-    options:{ indexAxis:'y', responsive:true, maintainAspectRatio:false, scales:{ x:{ min:0, max:100, ticks:{callback:v=>v+'%'} } },
-      plugins:{ legend:{display:false}, tooltip:{callbacks:{label:c=>c.parsed.x+'%'}} } } });
+  // Chaque graphique est isolé dans son propre try/catch : si l'un d'eux
+  // rencontre un souci de données, les autres se chargent quand même
+  // (avant cette correction, une erreur sur un seul graphique empêchait
+  // silencieusement les trois de s'afficher).
+  try{
+    const domainScores = computeDomainScores(center, effInputs(center, currentFsData));
+    const applicableDomains = DOMAINS.filter(d => !domainScores[d.key].na);
+    const ctx1 = document.getElementById('chartDomains').getContext('2d');
+    const radarData = {
+      labels: applicableDomains.map(d => d.label),
+      datasets: [{ label: center.name || 'FS', data: applicableDomains.map(d => Math.round(pct(domainScores[d.key].score, domainScores[d.key].plafond)*100)),
+        backgroundColor:'rgba(27,138,122,0.28)', borderColor:'#1b8a7a', borderWidth:2,
+        pointBackgroundColor:'#1b8a7a', pointRadius:3 }]
+    };
+    if(chartDomainsInst) chartDomainsInst.destroy();
+    chartDomainsInst = new Chart(ctx1, { type:'radar', data:radarData,
+      options:{ responsive:true, maintainAspectRatio:false,
+        scales:{ r:{ min:0, max:100, ticks:{ stepSize:20, callback:v=>v+'%', backdropColor:'transparent' },
+          pointLabels:{ font:{size:10.5} } } },
+        plugins:{ legend:{display:false}, tooltip:{callbacks:{label:c=>c.parsed.r+'%'}} } } });
+  }catch(err){ console.error('Graphique domaines :', err); }
 
-  const ctx2 = document.getElementById('chartExactitude').getContext('2d');
-  const effSrc = effSources(center, currentFsData);
-  const discVals = EXACT_DISCORD.map(d => {
-    const rowA = effSrc[d.a], rowB = effSrc[d.b];
-    const v = discordance(sourceTotal(rowA), sourceTotal(rowB));
-    return v===null ? 0 : Math.round(v*100);
-  });
-  const data2 = { labels: EXACT_DISCORD.map(d => d.label.replace('Discordance ','').slice(0,30)),
-    datasets: [{ label:'Discordance (%)', data: discVals, backgroundColor:'#c0392b', borderRadius:4 }] };
-  if(chartExactitudeInst) chartExactitudeInst.destroy();
-  chartExactitudeInst = new Chart(ctx2, { type:'bar', data:data2,
-    options:{ responsive:true, maintainAspectRatio:false, scales:{ y:{ min:0, max:100, ticks:{callback:v=>v+'%'} } },
-      plugins:{ legend:{display:false}, tooltip:{callbacks:{label:c=>c.parsed.y+'%'}} } } });
+  try{
+    const ctx2 = document.getElementById('chartExactitude').getContext('2d');
+    const effSrc = effSources(center, currentFsData);
+    const discVals = EXACT_DISCORD.map(d => {
+      const rowA = effSrc[d.a], rowB = effSrc[d.b];
+      const v = discordance(sourceTotal(rowA), sourceTotal(rowB));
+      return v===null ? 0 : Math.round(v*100);
+    });
+    const data2 = { labels: EXACT_DISCORD.map(d => d.label.replace('Discordance ','').slice(0,30)),
+      datasets: [{ label:'Discordance (%)', data: discVals, backgroundColor:'#c0392b', borderRadius:4 }] };
+    if(chartExactitudeInst) chartExactitudeInst.destroy();
+    chartExactitudeInst = new Chart(ctx2, { type:'bar', data:data2,
+      options:{ responsive:true, maintainAspectRatio:false, scales:{ y:{ min:0, max:100, ticks:{callback:v=>v+'%'} } },
+        plugins:{ legend:{display:false}, tooltip:{callbacks:{label:c=>c.parsed.y+'%'}} } } });
+  }catch(err){ console.error('Graphique exactitude :', err); }
 
-  const sorted = visibleCenters();
-  const compareLabels = sorted.map(c => c.name);
-  const compareData = sorted.map(c => {
-    const d = loadFsData(c.id);
-    const total = totalScore(c, effInputs(c, d));
-    const denom = totalPlafond(c);
-    return Math.round(pct(total, denom)*100);
-  });
-  const ctx3 = document.getElementById('chartCompare').getContext('2d');
-  if(chartCompareInst) chartCompareInst.destroy();
-  chartCompareInst = new Chart(ctx3, { type:'bar',
-    data:{ labels: compareLabels, datasets:[{ label:'Performance globale (%)', data: compareData,
-      backgroundColor: sorted.map(c => c.id===currentCenterId ? '#1f4e78' : '#9fc6d8'), borderRadius:4 }] },
-    options:{ responsive:true, maintainAspectRatio:false, scales:{ y:{ min:0, max:100, ticks:{callback:v=>v+'%'} } },
-      plugins:{ legend:{display:false}, tooltip:{callbacks:{label:c=>c.parsed.y+'%'}} } } });
+  try{
+    const sorted = visibleCenters();
+    const compareLabels = sorted.map(c => c.name);
+    const compareData = sorted.map(c => {
+      const d = loadFsData(c.id);
+      const total = totalScore(c, effInputs(c, d));
+      const denom = totalPlafond(c);
+      return Math.round(pct(total, denom)*100);
+    });
+    const ctx3 = document.getElementById('chartCompare').getContext('2d');
+    if(chartCompareInst) chartCompareInst.destroy();
+    chartCompareInst = new Chart(ctx3, { type:'bar',
+      data:{ labels: compareLabels, datasets:[{ label:'Performance globale (%)', data: compareData,
+        backgroundColor: sorted.map(c => c.id===currentCenterId ? '#1f4e78' : '#9fc6d8'), borderRadius:4 }] },
+      options:{ responsive:true, maintainAspectRatio:false, scales:{ y:{ min:0, max:100, ticks:{callback:v=>v+'%'} } },
+        plugins:{ legend:{display:false}, tooltip:{callbacks:{label:c=>c.parsed.y+'%'}} } } });
+  }catch(err){ console.error('Graphique comparaison :', err); }
 }
 // Recalcule la taille des graphiques quand l'écran change de taille/orientation
 // (utile sur mobile : sans ça, un graphique créé avant une rotation d'écran reste mal dimensionné).
@@ -2565,7 +2789,7 @@ let chartResizeTimer = null;
 window.addEventListener('resize', () => {
   clearTimeout(chartResizeTimer);
   chartResizeTimer = setTimeout(() => {
-    [chartDomainsInst, chartExactitudeInst, chartCompareInst].forEach(ch => { if(ch) ch.resize(); });
+    [chartDomainsInst, chartExactitudeInst, chartCompareInst, chartCommuneInst].forEach(ch => { if(ch) ch.resize(); });
   }, 150);
 });
 
@@ -2585,16 +2809,23 @@ function renderPriorisation(){
 
   prioBody.innerHTML = "";
   const effInp = effInputs(center, currentFsData);
-  INDICATORS.forEach(ind => {
-    if(!indicatorApplicable(center, ind)) return;
-    const inp = effInp[ind.id];
-    const frac = pctAtteintFor(ind, inp);
-    const sc = scoreFor(ind, inp);
-    const tr = document.createElement('tr');
-    tr.innerHTML = `<td class="center">Id ${ind.id}</td><td>${ind.label}</td>
-      <td class="center">${sc} / ${ind.plafond}</td><td class="center">${fmtPct(frac)}</td>
-      <td class="${ragClass(frac)}">${ragLabel(frac)}</td>`;
-    prioBody.appendChild(tr);
+  DOMAINS.forEach(d => {
+    if(domainFullyNA(center, d.key)) return;
+    const inds = INDICATORS.filter(i => i.domain === d.key && indicatorApplicable(center, i));
+    if(!inds.length) return;
+    const headRow = document.createElement('tr');
+    headRow.innerHTML = `<td colspan="5" class="dh">${escapeHtml(d.label)}</td>`;
+    prioBody.appendChild(headRow);
+    inds.forEach(ind => {
+      const inp = effInp[ind.id];
+      const frac = pctAtteintFor(ind, inp);
+      const sc = scoreFor(ind, inp);
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td class="center">Id ${ind.id}</td><td>${ind.label}</td>
+        <td class="center">${sc} / ${ind.plafond}</td><td class="center">${fmtPct(frac)}</td>
+        <td class="${ragClass(frac)}">${ragLabel(frac)}</td>`;
+      prioBody.appendChild(tr);
+    });
   });
 
   synthesisWrap.innerHTML = "";
@@ -2830,9 +3061,32 @@ function renderPhotos(){
     : `<span class="badge notsent">Pas encore envoyé</span>`;
 }
 
+// Vérifie que la synthèse (points forts / à améliorer / recommandations) de chaque
+// domaine applicable, ainsi que le plan d'action, sont renseignés avant de permettre
+// l'envoi final des données.
+function prioAndPlanMissing(center, fsData){
+  const missing = [];
+  DOMAINS.forEach(d => {
+    if(domainFullyNA(center, d.key)) return;
+    const s = fsData.synth[d.key];
+    if(!s.forts.some(v => (v||'').trim())) missing.push(`${d.label} — Points forts`);
+    if(!s.ameliorer.some(v => (v||'').trim())) missing.push(`${d.label} — Points à améliorer`);
+    if(!s.reco.some(v => (v||'').trim())) missing.push(`${d.label} — Recommandations`);
+  });
+  const planOk = (fsData.plan||[]).some(row => (row.domain||'').trim() && (row.indicateur||'').toString().trim() && (row.activite||'').trim());
+  if(!planOk) missing.push("Plan d'action — aucune ligne complète (domaine, indicateur et activité) renseignée");
+  return missing;
+}
 document.getElementById('btnSendData').addEventListener('click', () => {
   const center = currentCenter();
   if(!center){ alert("Aucune FS sélectionnée."); return; }
+  const missing = prioAndPlanMissing(center, currentFsData);
+  if(missing.length){
+    alert("Impossible d'envoyer les données : la Priorisation (points forts / à améliorer / recommandations) et le Plan d'action doivent être renseignés.\n\nÉléments manquants :\n- " +
+      missing.join('\n- '));
+    openTab('priorisation');
+    return;
+  }
   currentFsData.sent = true;
   currentFsData.sentAt = new Date().toISOString();
   currentFsData.locked = false; // l'envoi final déverrouille la relecture de toutes les pages
@@ -2860,6 +3114,14 @@ const tabButtons = document.querySelectorAll('nav.tabs button');
 tabButtons.forEach(btn => {
   btn.addEventListener('click', () => {
     if(btn.dataset.tab === 'admin' && !hasAdminAccess()) return;
+    const wasAdmin = adminEditMode;
+    adminEditMode = (btn.dataset.tab === 'admin');
+    if(wasAdmin && !adminEditMode){
+      // On quitte la page Admin : on sauvegarde ce qui restait en attente (filet de
+      // sécurité), puis la synchronisation automatique normale reprend son cours.
+      flushSaves();
+      pullFromBackend();
+    }
     tabButtons.forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
