@@ -1393,6 +1393,15 @@ function onRemoteDataChanged(){
   if(hasAdminAccess()){
     renderTracking();
     renderAggregates();
+    // Le reste du tableau de bord (liste des FS, comptes équipes/ZS, données
+    // centralisées) contient des champs éditables : on ne le reconstruit que si
+    // l'administrateur n'est pas au milieu d'une saisie dessus, pour ne jamais lui
+    // faire perdre le focus. C'est ce qui manquait pour qu'un nouvel appareil,
+    // fraîchement connecté et vide, affiche bien la configuration reçue du serveur
+    // (centres, comptes...) sans attendre un changement d'onglet manuel.
+    if(!isEditingActiveField()){
+      renderAdmin(); renderUsers(); renderZsManagers(); renderOverrides(); renderAdminSrc();
+    }
   }
   // Ne jamais interrompre une saisie en cours (Outil 1/2/3, Priorisation, Plan...) :
   // les données reçues du serveur sont déjà appliquées et enregistrées localement
@@ -1415,6 +1424,7 @@ document.addEventListener('focusout', () => {
   setTimeout(() => {
     if(isEditingActiveField()) return; // toujours en train de saisir ailleurs : on retentera au prochain changement de focus
     pendingRenderAfterFocus = false;
+    if(hasAdminAccess()){ renderAdmin(); renderUsers(); renderZsManagers(); renderOverrides(); renderAdminSrc(); }
     refreshFsSelect();
     renderAllTools();
   }, 150);
@@ -1430,7 +1440,12 @@ let syncPollTimer = null;
 function startSyncPolling(){
   if(syncPollTimer) clearInterval(syncPollTimer);
   if(!backendConfigured()) { updateSyncIndicator(); return; }
-  pullFromBackend();
+  // force=true sur cette toute première synchronisation après connexion : sur
+  // l'onglet Administration, openTab('admin') a déjà pu passer adminEditMode à
+  // true avant qu'on arrive ici, ce qui bloquerait sinon la réception des centres,
+  // des comptes et du mot de passe administrateur à jour — en particulier sur un
+  // tout nouvel appareil/navigateur qui n'a encore rien en local.
+  pullFromBackend(true);
   syncPollTimer = setInterval(pullFromBackend, 8000); // quasi temps réel : toutes les 8s
   updateSyncIndicator();
 }
@@ -1767,12 +1782,39 @@ function loginPaneIdFor(tab){
 
 function showLoginError(msg){ loginError.textContent = msg; loginError.style.display = ""; }
 
-document.getElementById('btnAdminLogin').addEventListener('click', () => {
+document.getElementById('btnAdminLogin').addEventListener('click', async () => {
   const pass = document.getElementById('adminLoginPassword').value;
-  if(pass === getAdminPass()){
-    startSession('admin', null);
-  } else showLoginError("Mot de passe administrateur incorrect.");
+  if(pass === getAdminPass()){ startSession('admin', null); return; }
+  if(!backendConfigured()){ showLoginError("Mot de passe administrateur incorrect."); return; }
+  // Le mot de passe ne correspond pas à la copie locale : sur un nouvel appareil/
+  // navigateur (rien en local), ou si le mot de passe a été changé ailleurs depuis,
+  // on vérifie une dernière fois auprès du serveur avant de refuser l'accès.
+  const btn = document.getElementById('btnAdminLogin');
+  const originalLabel = btn.textContent;
+  btn.disabled = true; btn.textContent = "Vérification…";
+  loginError.style.display = "none";
+  try{
+    await refreshAdminConfigFromServer();
+    if(pass === getAdminPass()){ startSession('admin', null); }
+    else showLoginError("Mot de passe administrateur incorrect.");
+  } finally {
+    btn.disabled = false; btn.textContent = originalLabel;
+  }
 });
+// Récupère depuis le serveur les tables « propriété » de l'administrateur (centres,
+// comptes équipes/gestionnaires ZS, mot de passe et paramètres généraux), pour
+// qu'un nouvel appareil retrouve immédiatement toute la configuration existante.
+async function refreshAdminConfigFromServer(){
+  if(!backendConfigured()) return;
+  try{
+    let url = backendUrl + (backendUrl.includes('?') ? '&' : '?') + 'action=pull&secret=' + encodeURIComponent(backendSecret) + '&since=0&role=admin&akey=' + encodeURIComponent(backendAdminKey);
+    const res = await fetch(url);
+    const json = await res.json();
+    if(json.error) return;
+    applyRemoteLookups(json.tables || {});
+    if(json.serverTime) localStorage.setItem(LS_LAST_SYNC, String(json.serverTime));
+  }catch(e){ console.warn('Récupération de la configuration administrateur échouée :', e); }
+}
 document.getElementById('btnUserLogin').addEventListener('click', () => {
   attemptLogin('user', 'btnUserLogin', document.getElementById('userLoginUsername').value.trim(), document.getElementById('userLoginPassword').value);
 });
