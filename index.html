@@ -2880,11 +2880,15 @@ function onIndicatorChange(e){
 
   // Validation stricte numérateur ≤ dénominateur (aucune proportion ne peut dépasser
   // 100%), sauf l'Id 6. On ne bloque qu'à la validation du champ (perte de focus /
-  // Entrée), pas à chaque frappe, pour ne pas gêner la saisie en cours.
-  if(e.type === 'change' && field === 'n' && !NUM_LE_DENOM_EXCLUDED_IDS.includes(ind.id)){
+  // Entrée), pas à chaque frappe. Comme le numérateur est en général saisi AVANT le
+  // dénominateur, on ne vérifie pas tant que le dénominateur est encore à 0 (valeur
+  // par défaut = pas encore renseigné) — sauf pour les dénominateurs "systématiques"
+  // (calqués/fixes), déjà connus dès la saisie du numérateur.
+  if(e.type === 'change' && (field === 'n' || field === 'd') && !NUM_LE_DENOM_EXCLUDED_IDS.includes(ind.id)){
     const d = Number(currentFsData.inputs[id].d) || 0;
     const n = Number(currentFsData.inputs[id].n) || 0;
-    if(n > d){
+    const denomNotYetEntered = field === 'n' && d === 0 && !DENOMINATOR_LINKS[ind.id];
+    if(!denomNotYetEntered && n > d){
       alert(`Erreur — Id ${ind.id} : ${ind.label}\n\nLe numérateur (${n}) ne peut pas dépasser le dénominateur (${d}) : une proportion ne peut jamais excéder 100%.\n\nLe numérateur a été effacé, merci de corriger la valeur.`);
       currentFsData.inputs[id].n = 0;
       renderOutil1();
