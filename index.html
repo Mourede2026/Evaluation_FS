@@ -1903,6 +1903,14 @@ function enterApp(){
   if(ROLE === 'admin'){
     whoamiBadge.textContent = "Administrateur";
     nav.forEach(b => b.classList.remove('hidden-tab'));
+    // Le compte Administrateur ne doit pas voir les pages de saisie réservées aux
+    // équipes de terrain (Outils, Priorisation, Plan, Photos) : les données lui
+    // parviennent automatiquement via la synchronisation (tableau de suivi, icône
+    // œil). Seules « Administration » et « Graphiques » (lecture seule) restent
+    // visibles.
+    ['outil1','outil3','outil2','priorisation','plan','photos'].forEach(t => {
+      document.querySelector(`nav.tabs button[data-tab="${t}"]`).classList.add('hidden-tab');
+    });
     openTab('admin');
   } else if(ROLE === 'zsmanager'){
     whoamiBadge.textContent = "Gestionnaire ZS : " + (CURRENT_ZSMANAGER ? CURRENT_ZSMANAGER.zone : "");
@@ -2359,7 +2367,10 @@ function renderTracking(){
       <td>${escapeHtml(c.zone||'—')}</td>
       <td class="center">${c.date ? new Date(c.date).toLocaleDateString('fr-FR') : '<span style="color:var(--muted);">—</span>'}</td>
       <td class="center">${denom? fmtPct(pct(total,denom)) : "—"} (${total}/${denom})</td>
-      <td class="center"><span class="badge ${d.locked?'locked':'moyenne'}">${d.locked?'Verrouillée':'En cours'}</span></td>
+      <td class="center">
+        <span class="badge ${d.locked?'locked':'moyenne'}">${d.locked?'Verrouillée':'En cours'}</span>
+        ${d.locked ? `<button type="button" class="icon-btn" title="Déverrouiller cette FS" data-unlock-center="${c.id}">🔓</button>` : ''}
+      </td>
       <td class="center">
         <span class="badge ${d.sent?'sent':'notsent'}">${d.sent ? ('Reçue le '+ (d.sentAt? new Date(d.sentAt).toLocaleDateString('fr-FR')+' à '+new Date(d.sentAt).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}) : '')) : 'Non reçue'}</span>
         ${d.sent ? `<button type="button" class="icon-btn" title="Voir les données envoyées" data-view-submission="${c.id}">👁️</button>` : ''}
@@ -2369,10 +2380,18 @@ function renderTracking(){
   });
 }
 trackingBody.addEventListener('click', (e) => {
-  const btn = e.target.closest('[data-view-submission]');
-  if(!btn) return;
-  openSubmissionView(btn.dataset.viewSubmission);
+  const viewBtn = e.target.closest('[data-view-submission]');
+  if(viewBtn){ openSubmissionView(viewBtn.dataset.viewSubmission); return; }
+  const unlockBtn = e.target.closest('[data-unlock-center]');
+  if(unlockBtn){ unlockCenterFromTracking(unlockBtn.dataset.unlockCenter); return; }
 });
+function unlockCenterFromTracking(centerId){
+  const data = loadFsData(centerId);
+  data.locked = false;
+  saveFsData(centerId, data);
+  if(centerId === currentCenterId){ currentFsData = data; updateLockUi(); renderAllTools(); }
+  renderTracking();
+}
 
 /* --- Fenêtre « Voir les données envoyées » (icône œil, page Suivi) --- */
 const submissionModalOverlay = document.getElementById('submissionModalOverlay');
