@@ -119,6 +119,11 @@ tr.na-row td{background:var(--grey); color:#9aa4a8; font-style:italic;}
 tr.na-row input, tr.na-row select{background:var(--grey); color:#9aa4a8;}
 tr.admin-ctrl-row td{background:#f2f4f4;}
 input.input-warning{border-color:#d97706 !important; background:#fff8ec !important; box-shadow:0 0 0 1px #d97706 inset;}
+.eval-weeks-grid{display:grid; grid-template-columns:repeat(13,1fr); gap:6px;}
+.eval-weeks-grid label{display:flex; flex-direction:column; align-items:center; gap:3px; font-size:10.5px; color:var(--navy); background:#fff; border:1px solid var(--line); border-radius:6px; padding:5px 2px; cursor:pointer; user-select:none;}
+.eval-weeks-grid label:has(input:checked){background:var(--teal-light); border-color:var(--teal); font-weight:700;}
+.eval-weeks-grid input{margin:0;}
+@media (max-width:640px){.eval-weeks-grid{grid-template-columns:repeat(7,1fr);}}
 input[type=number], input[type=text], input[type=password], input[type=date], select, textarea{
   width:100%; padding:6px 7px; border:1px solid var(--line); border-radius:5px; font-size:12.8px; font-family:inherit; background:#fff;
 }
@@ -314,6 +319,23 @@ footer{text-align:center; font-size:11.5px; color:var(--muted); padding:20px;}
     </div>
 
     <div id="adminUnlocked" style="display:none;">
+      <div class="card">
+        <h2>Période évaluée</h2>
+        <div class="body">
+          <p class="hint">Définit la période de référence de l'évaluation en cours. Cette période est <strong>commune à
+          toutes les FS</strong> et sert à calculer automatiquement le dénominateur de l'Id 5 (nombre de semaines
+          cochées × numérateur de l'Id 3) et de l'Id 6 (nombre de mois estimé à partir du nombre de semaines cochées).</p>
+          <div class="fs-toolbar" style="margin-bottom:14px;">
+            <label style="font-weight:700;font-size:13px;color:var(--navy);">Année :</label>
+            <select id="evalYearSelect"></select>
+            <span id="evalWeeksSummary" style="font-weight:700;color:var(--teal);"></span>
+            <button type="button" class="btn btn-outline" id="btnCheckAllWeeks">Tout cocher</button>
+            <button type="button" class="btn btn-outline" id="btnUncheckAllWeeks">Tout décocher</button>
+          </div>
+          <div id="evalWeeksGrid" class="eval-weeks-grid"></div>
+        </div>
+      </div>
+
       <div class="card">
         <h2>Nommer les centres (FS) dans l'ordre d'évaluation</h2>
         <div class="body">
@@ -855,6 +877,8 @@ const ADMIN_CONTROLLED_IDS = [12, 19, 20];
 // automatiquement à chaque modification de la source.
 const DENOMINATOR_LINKS = {
   4:  {type:'mirror', srcId:1,  srcField:'d'},   // Id4 = Id1 (dénominateur)
+  5:  {type:'formula', compute:(center, fsData) => evalWeeksCount() * ((fsData.inputs[3]||{}).n || 0)}, // Id5 = nb semaines cochées × numérateur Id3
+  6:  {type:'formula', compute:(center, fsData) => estimateMonthsFromWeeks(evalWeeksCount())},           // Id6 = nb de mois estimé à partir des semaines cochées
   7:  {type:'mirror', srcId:6,  srcField:'n'},   // Id7 = Id6 (numérateur)
   8:  {type:'mirror', srcId:6,  srcField:'n'},   // Id8 = Id6 (numérateur)
   9:  {type:'mirror', srcId:2,  srcField:'d'},   // Id9 = Id2 (dénominateur)
@@ -879,10 +903,12 @@ Object.keys(DENOMINATOR_LINKS).forEach(id => {
     (DENOMINATOR_LINK_DEPENDENTS[key] = DENOMINATOR_LINK_DEPENDENTS[key] || []).push(parseInt(id));
   }
 });
+(DENOMINATOR_LINK_DEPENDENTS['3.n'] = DENOMINATOR_LINK_DEPENDENTS['3.n'] || []).push(5); // Id3 numérateur -> Id5
 function resolveLinkedDenominator(center, fsData, indId){
   const link = DENOMINATOR_LINKS[indId];
   if(!link) return null;
   if(link.type === 'constant') return link.value;
+  if(link.type === 'formula') return link.compute(center, fsData) || 0;
   const srcAdminCtrl = ADMIN_CONTROLLED_IDS.includes(link.srcId);
   const srcInp = srcAdminCtrl ? ((center.adminOverrides && center.adminOverrides[link.srcId]) || {n:0,d:0}) : (fsData.inputs[link.srcId] || {n:0,d:0});
   return srcInp[link.srcField] || 0;
@@ -1056,6 +1082,8 @@ const LS_DATA_PREFIX = "tdes_fsdata_v3_";
 const LS_ADMIN_PASS = "tdes_admin_pass_v1";
 const LS_USERS = "tdes_users_v1";
 const LS_ZSMANAGERS = "tdes_zsmanagers_v1";
+const LS_EVAL_YEAR = "tdes_eval_year_v1";
+const LS_EVAL_WEEKS = "tdes_eval_weeks_v1";
 const DEFAULT_PASS = "admin123";
 const SS_SESSION = "tdes_session_v1"; // {role:'admin'|'user', userId}
 
@@ -1220,7 +1248,14 @@ function applyRemoteLookups(tables){
     changed = true;
   }
   if(tables.parametres && tables.parametres.length){
-    tables.parametres.forEach(r => { if(r.Cle === 'AdminPass' && r.Valeur){ localStorage.setItem(LS_ADMIN_PASS, r.Valeur); } });
+    tables.parametres.forEach(r => {
+      if(r.Cle === 'AdminPass' && r.Valeur){ localStorage.setItem(LS_ADMIN_PASS, r.Valeur); }
+      if(r.Cle === 'EvalYear' && r.Valeur){ localStorage.setItem(LS_EVAL_YEAR, r.Valeur); evalYear = parseInt(r.Valeur) || evalYear; }
+      if(r.Cle === 'EvalWeeks' && r.Valeur){
+        localStorage.setItem(LS_EVAL_WEEKS, r.Valeur);
+        try{ const arr = JSON.parse(r.Valeur); if(Array.isArray(arr)) evalWeeks = new Set(arr.map(Number)); }catch(e){}
+      }
+    });
     changed = true;
   }
   return changed;
@@ -1410,7 +1445,7 @@ function saveFsData(centerId, data){
    60 secondes, ou immédiatement via le bouton « Enregistrer », ou lors d'un
    changement de FS / déconnexion / fermeture de page.
    ========================================================================= */
-let dirtyFs = false, dirtyCenters = false, dirtyUsers = false, dirtyZsManagers = false;
+let dirtyFs = false, dirtyCenters = false, dirtyUsers = false, dirtyZsManagers = false, dirtyParams = false;
 let lastSavedAt = null;
 // Saisie des équipes (Outils 1/2/3, etc.) : sauvegarde locale automatique toutes les 20s,
 // pour ne rien perdre si la page se ferme avant un enregistrement manuel.
@@ -1423,16 +1458,18 @@ function markFsDirty(){ dirtyFs = true; updateSaveIndicator(); }
 function markCentersDirty(){ dirtyCenters = true; updateSaveIndicator(); }
 function markUsersDirty(){ dirtyUsers = true; updateSaveIndicator(); }
 function markZsManagersDirty(){ dirtyZsManagers = true; updateSaveIndicator(); }
+function markParamsDirty(){ dirtyParams = true; updateSaveIndicator(); }
 
 function flushSaves(){
   if(dirtyFs && currentCenterId){ saveFsData(currentCenterId, currentFsData); dirtyFs = false; }
   if(dirtyCenters){ saveCenters(centers); dirtyCenters = false; }
   if(dirtyUsers){ saveUsers(users); dirtyUsers = false; }
   if(dirtyZsManagers){ saveZsManagers(zsManagers); dirtyZsManagers = false; }
+  if(dirtyParams){ saveEvalPeriod(); dirtyParams = false; }
   lastSavedAt = new Date();
   updateSaveIndicator();
 }
-function hasUnsavedChanges(){ return dirtyFs || dirtyCenters || dirtyUsers || dirtyZsManagers; }
+function hasUnsavedChanges(){ return dirtyFs || dirtyCenters || dirtyUsers || dirtyZsManagers || dirtyParams; }
 
 function updateSaveIndicator(){
   const el = document.getElementById('saveIndicator');
@@ -1463,6 +1500,34 @@ window.addEventListener('beforeunload', (e) => {
 let centers = loadCenters();
 let users = loadUsers();
 let zsManagers = loadZsManagers();
+// Période évaluée (globale, définie par l'administrateur) : année + semaines épidémiologiques
+// cochées (1 à 52). Sert à calculer automatiquement les dénominateurs des Id 5 et Id 6.
+// Par défaut : année en cours, les 52 semaines (pour ne rien casser tant que l'admin
+// n'a pas explicitement défini sa période).
+function loadEvalYear(){ const v = parseInt(localStorage.getItem(LS_EVAL_YEAR)); return v || new Date().getFullYear(); }
+function loadEvalWeeks(){
+  try{
+    const v = JSON.parse(localStorage.getItem(LS_EVAL_WEEKS) || 'null');
+    if(Array.isArray(v) && v.length) return new Set(v.map(Number));
+  }catch(e){}
+  return new Set(Array.from({length:52}, (_,i) => i+1));
+}
+let evalYear = loadEvalYear();
+let evalWeeks = loadEvalWeeks(); // Set<number> des semaines cochées (1..52)
+function evalWeeksCount(){ return evalWeeks.size; }
+// Estimation du nombre de mois à partir du nombre de semaines cochées (52 semaines/an ≈ 12 mois).
+function estimateMonthsFromWeeks(weeksCount){
+  if(!weeksCount) return 0;
+  return Math.max(1, Math.round(weeksCount * 12 / 52));
+}
+function saveEvalPeriod(){
+  localStorage.setItem(LS_EVAL_YEAR, String(evalYear));
+  localStorage.setItem(LS_EVAL_WEEKS, JSON.stringify(Array.from(evalWeeks).sort((a,b)=>a-b)));
+  pushTables({ parametres: [
+    { Cle:'EvalYear', Valeur: String(evalYear) },
+    { Cle:'EvalWeeks', Valeur: JSON.stringify(Array.from(evalWeeks).sort((a,b)=>a-b)) }
+  ] });
+}
 let currentCenterId = null;
 let currentFsData = defaultFsData();
 let ROLE = null;        // 'admin' | 'zsmanager' | 'user'
@@ -1817,11 +1882,70 @@ function enterApp(){
 const adminBody = document.getElementById('adminBody');
 const STRUCT_TYPES = ["Publique", "Privée", "Hôpital"];
 
+/* --- Période évaluée (année + semaines 1-52), globale, définie par l'administrateur --- */
+const evalYearSelect = document.getElementById('evalYearSelect');
+const evalWeeksGrid = document.getElementById('evalWeeksGrid');
+const evalWeeksSummary = document.getElementById('evalWeeksSummary');
+let evalWeeksGridBuilt = false;
+function renderEvalPeriod(){
+  if(!hasAdminAccess()) return;
+  if(evalYearSelect.options.length === 0){
+    const curYear = new Date().getFullYear();
+    const years = [];
+    for(let y = curYear - 3; y <= curYear + 2; y++) years.push(y);
+    if(!years.includes(evalYear)) years.push(evalYear);
+    years.sort((a,b)=>a-b);
+    evalYearSelect.innerHTML = years.map(y => `<option value="${y}">${y}</option>`).join('');
+  }
+  evalYearSelect.value = String(evalYear);
+  if(!evalWeeksGridBuilt){
+    evalWeeksGrid.innerHTML = "";
+    for(let w = 1; w <= 52; w++){
+      const label = document.createElement('label');
+      label.innerHTML = `<input type="checkbox" value="${w}" ${evalWeeks.has(w)?'checked':''}> S${w}`;
+      evalWeeksGrid.appendChild(label);
+    }
+    evalWeeksGridBuilt = true;
+    evalWeeksGrid.querySelectorAll('input[type=checkbox]').forEach(chk => {
+      chk.addEventListener('change', () => {
+        const w = parseInt(chk.value);
+        if(chk.checked) evalWeeks.add(w); else evalWeeks.delete(w);
+        markParamsDirty();
+        updateEvalWeeksSummary();
+      });
+    });
+  } else {
+    evalWeeksGrid.querySelectorAll('input[type=checkbox]').forEach(chk => {
+      chk.checked = evalWeeks.has(parseInt(chk.value));
+    });
+  }
+  updateEvalWeeksSummary();
+}
+function updateEvalWeeksSummary(){
+  const n = evalWeeksCount();
+  evalWeeksSummary.textContent = `${n} semaine(s) cochée(s) — ≈ ${estimateMonthsFromWeeks(n)} mois`;
+}
+evalYearSelect.addEventListener('change', () => {
+  evalYear = parseInt(evalYearSelect.value) || evalYear;
+  markParamsDirty();
+});
+document.getElementById('btnCheckAllWeeks').addEventListener('click', () => {
+  for(let w=1; w<=52; w++) evalWeeks.add(w);
+  markParamsDirty();
+  renderEvalPeriod();
+});
+document.getElementById('btnUncheckAllWeeks').addEventListener('click', () => {
+  evalWeeks.clear();
+  markParamsDirty();
+  renderEvalPeriod();
+});
+
 function renderAdmin(){
   if(!hasAdminAccess()) return;
   document.getElementById('adminNoAccess').style.display = "none";
   document.getElementById('adminUnlocked').style.display = "";
   document.getElementById('cardZsManagers').style.display = (ROLE === 'admin') ? "" : "none";
+  renderEvalPeriod();
   const scoped = visibleCenters();
   adminBody.innerHTML = "";
   scoped.forEach((c) => {
@@ -2704,7 +2828,9 @@ function renderOutil1(){
         if(dLink){
           const linkedVal = resolveLinkedDenominator(center, currentFsData, ind.id);
           inp.d = linkedVal; // garde la donnée stockée synchronisée (exports, scores, etc.)
-          const srcHint = dLink.type === 'constant' ? `valeur fixe : ${dLink.value}` : `calqué sur Id ${dLink.srcId}`;
+          const srcHint = dLink.type === 'constant' ? `valeur fixe : ${dLink.value}`
+            : dLink.type === 'formula' ? (ind.id === 5 ? `= ${evalWeeksCount()} semaine(s) cochée(s) × numérateur Id 3` : `≈ ${evalWeeksCount()} semaine(s) cochée(s) converties en mois`)
+            : `calqué sur Id ${dLink.srcId}`;
           dCellHtml = `<td class="center" style="background:#eef0f0;color:#5b6b74;" title="Dénominateur non modifiable — ${srcHint}">${linkedVal} <span title="${srcHint}">🔒</span></td>`;
         } else {
           dCellHtml = `<td class="input-cell"><input type="number" min="0" step="1" value="${inp.d}" data-ind="${ind.id}" data-field="d" ${na?'disabled':''} title="${escapeAttr(ind.dLabel||'Dénominateur')}"></td>`;
@@ -2751,6 +2877,25 @@ function onIndicatorChange(e){
   currentFsData.inputs[id][field] = value;
   currentFsData.touched[id] = true;
   markFsDirty();
+
+  // Validation stricte numérateur ≤ dénominateur (aucune proportion ne peut dépasser
+  // 100%), sauf l'Id 6. On ne bloque qu'à la validation du champ (perte de focus /
+  // Entrée), pas à chaque frappe, pour ne pas gêner la saisie en cours.
+  if(e.type === 'change' && field === 'n' && !NUM_LE_DENOM_EXCLUDED_IDS.includes(ind.id)){
+    const d = Number(currentFsData.inputs[id].d) || 0;
+    const n = Number(currentFsData.inputs[id].n) || 0;
+    if(n > d){
+      alert(`Erreur — Id ${ind.id} : ${ind.label}\n\nLe numérateur (${n}) ne peut pas dépasser le dénominateur (${d}) : une proportion ne peut jamais excéder 100%.\n\nLe numérateur a été effacé, merci de corriger la valeur.`);
+      currentFsData.inputs[id].n = 0;
+      renderOutil1();
+      const freshEl = outil1Body.querySelector(`[data-ind="${id}"][data-field="n"]`);
+      if(freshEl){ freshEl.focus(); freshEl.select(); }
+      renderOutil2();
+      renderPerfBanner();
+      return;
+    }
+  }
+
   renderPerfBanner();
   // Si cette valeur sert de source à un dénominateur calqué (Id4/7/8/9/21/29), on
   // refait un rendu complet pour que ces dénominateurs affichés se mettent à jour
