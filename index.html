@@ -1348,12 +1348,39 @@ async function pullFromBackend(force){
     if(changed) onRemoteDataChanged(); else updateSyncIndicator(true);
   }catch(e){ console.warn('Synchronisation (réception) échouée :', e); }
 }
+let pendingRenderAfterFocus = false;
+function isEditingActiveField(){
+  const ae = document.activeElement;
+  if(!ae) return false;
+  return ae.tagName === 'INPUT' || ae.tagName === 'SELECT' || ae.tagName === 'TEXTAREA';
+}
 function onRemoteDataChanged(){
   if(!ROLE) return;
+  // Ne jamais interrompre une saisie en cours (Outil 1/2/3, Priorisation, Plan...) :
+  // les données reçues du serveur sont déjà appliquées et enregistrées localement
+  // (voir applyRemoteLookups/applyRemoteFsRows, appelés avant cette fonction) ; seul
+  // le rafraîchissement visuel est différé, le temps que le champ actif soit quitté.
+  if(isEditingActiveField()){
+    pendingRenderAfterFocus = true;
+    updateSyncIndicator(true);
+    return;
+  }
   refreshFsSelect();
   renderAllTools();
   updateSyncIndicator(true);
 }
+// Dès qu'un champ perd le focus, on vérifie (avec un court délai, pour laisser la
+// tabulation atteindre le champ suivant) si la personne a fini de saisir ; si oui,
+// on applique enfin le rafraîchissement resté en attente.
+document.addEventListener('focusout', () => {
+  if(!pendingRenderAfterFocus) return;
+  setTimeout(() => {
+    if(isEditingActiveField()) return; // toujours en train de saisir ailleurs : on retentera au prochain changement de focus
+    pendingRenderAfterFocus = false;
+    refreshFsSelect();
+    renderAllTools();
+  }, 150);
+}, true);
 function updateSyncIndicator(justSynced){
   const el = document.getElementById('syncIndicator');
   if(!el) return;
@@ -3038,24 +3065,39 @@ function renderOutil3SoftUpdate(){
     const cell = outil3SourceBody.querySelector(`[data-src-total="${idx}"]`);
     if(cell) cell.textContent = sourceTotal(eff[idx]);
   });
-  renderOutil3Discord();
+  updateOutil3DiscordValues();
 }
+// Construit la table des discordances UNE SEULE FOIS (structure fixe : lignes/colonnes
+// toujours les mêmes). Recréer tout le tbody à chaque frappe pouvait perturber le focus
+// et faire défiler la page pendant la saisie — désormais seul le texte des cellules est
+// mis à jour (updateOutil3DiscordValues), sans jamais recréer d'éléments.
 function renderOutil3Discord(){
-  const center = currentCenter();
-  const eff = effSources(center, currentFsData);
   outil3DiscordBody.innerHTML = "";
-  EXACT_DISCORD.forEach(d => {
+  const cols = ["simr","dcm","dcn","d5"];
+  EXACT_DISCORD.forEach((d, dIdx) => {
+    const cellsHtml = cols.map(c => `<td class="center" data-disc="${dIdx}-${c}">—</td>`).join('');
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${d.label}</td>${cellsHtml}<td class="center calc-cell" data-disc-total="${dIdx}">—</td>`;
+    outil3DiscordBody.appendChild(tr);
+  });
+  updateOutil3DiscordValues();
+}
+function updateOutil3DiscordValues(){
+  const center = currentCenter();
+  if(!center) return;
+  const eff = effSources(center, currentFsData);
+  const cols = ["simr","dcm","dcn","d5"];
+  EXACT_DISCORD.forEach((d, dIdx) => {
     const rowA = eff[d.a];
     const rowB = eff[d.b];
-    const cols = ["simr","dcm","dcn","d5"];
-    const cellsHtml = cols.map(c => {
+    cols.forEach(c => {
       const disc = discordance(rowA[c]||0, rowB[c]||0);
-      return `<td class="center">${disc===null ? "—" : fmtPct(disc)}</td>`;
-    }).join('');
+      const cell = outil3DiscordBody.querySelector(`[data-disc="${dIdx}-${c}"]`);
+      if(cell) cell.textContent = disc===null ? "—" : fmtPct(disc);
+    });
     const totalDisc = discordance(sourceTotal(rowA), sourceTotal(rowB));
-    const tr = document.createElement('tr');
-    tr.innerHTML = `<td>${d.label}</td>${cellsHtml}<td class="center calc-cell">${totalDisc===null?"—":fmtPct(totalDisc)}</td>`;
-    outil3DiscordBody.appendChild(tr);
+    const totalCell = outil3DiscordBody.querySelector(`[data-disc-total="${dIdx}"]`);
+    if(totalCell) totalCell.textContent = totalDisc===null ? "—" : fmtPct(totalDisc);
   });
 }
 
