@@ -902,6 +902,8 @@ footer{text-align:center; font-size:11.5px; color:var(--muted); padding:20px;}
     <div class="fs-report-head">
       <h2 id="fsReportTitle">Détail de la FS</h2>
       <div style="display:flex; gap:8px;">
+        <button type="button" class="btn btn-outline" id="btnEditFsReport">✏️ Modifier</button>
+        <button type="button" class="btn btn-outline" id="btnDeleteFsReport" style="color:#c0392b;border-color:#e2b3ac;">🗑️ Supprimer la soumission</button>
         <button type="button" class="btn btn-outline" id="btnPrintFsReport">🖨️ Imprimer / PDF</button>
         <button type="button" class="btn btn-ghost" id="btnCloseFsReport" style="background:rgba(255,255,255,.15);">✕ Fermer</button>
       </div>
@@ -2387,13 +2389,55 @@ function renderTracking(){
       <td class="center">${denom? fmtPct(pct(total,denom)) : "—"} (${total}/${denom})</td>
       <td class="center"><span class="badge ${d.locked?'locked':'moyenne'}">${d.locked?'Verrouillée':'En cours'}</span></td>
       <td class="center"><span class="badge ${d.sent?'sent':'notsent'}">${d.sent ? ('Reçues le '+ (d.sentAt? new Date(d.sentAt).toLocaleDateString('fr-FR') : '')) : 'Non reçues'}</span></td>
-      <td class="center"><button type="button" class="btn btn-outline" data-view-fs="${c.id}" style="padding:5px 10px;font-size:12px;">👁 Voir</button></td>
+      <td class="center" style="white-space:nowrap;">
+        <button type="button" class="btn btn-outline" data-view-fs="${c.id}" style="padding:5px 8px;font-size:12px;" title="Voir toutes les données">👁</button>
+        <button type="button" class="btn btn-outline" data-edit-fs="${c.id}" style="padding:5px 8px;font-size:12px;" title="Modifier cette soumission">✏️</button>
+        <button type="button" class="btn btn-outline" data-delete-fs="${c.id}" style="padding:5px 8px;font-size:12px;color:#c0392b;border-color:#e2b3ac;" title="Supprimer cette soumission">🗑️</button>
+      </td>
     `;
     trackingBody.appendChild(tr);
   });
   trackingBody.querySelectorAll('[data-view-fs]').forEach(btn => {
     btn.addEventListener('click', () => openFsReport(btn.dataset.viewFs));
   });
+  trackingBody.querySelectorAll('[data-edit-fs]').forEach(btn => {
+    btn.addEventListener('click', () => editSubmission(btn.dataset.editFs));
+  });
+  trackingBody.querySelectorAll('[data-delete-fs]').forEach(btn => {
+    btn.addEventListener('click', () => deleteSubmission(btn.dataset.deleteFs));
+  });
+}
+// Bascule directement sur la FS choisie et ouvre l'Outil 1, pour que l'admin puisse
+// corriger une soumission importée comme n'importe quelle autre saisie.
+function editSubmission(centerId){
+  const center = centers.find(c => c.id === centerId);
+  if(!center) return;
+  document.getElementById('fsReportOverlay').style.display = "none";
+  currentCenterId = centerId;
+  currentFsData = loadFsData(centerId);
+  fsSelect.value = centerId;
+  updateFsMeta();
+  updateLockUi();
+  updateCollectionDateField();
+  openTab('outil1');
+  renderAllTools();
+}
+// Supprime (remet à zéro) une soumission déjà importée/reçue pour une FS : Outils
+// 1/2/3, Priorisation, Plan, Évaluateurs et Photos repartent à vide pour cette FS
+// uniquement. La liste des FS, comptes et paramètres admin n'est pas affectée.
+function deleteSubmission(centerId){
+  const center = centers.find(c => c.id === centerId);
+  if(!center) return;
+  const pass = prompt(`Confirmez avec le mot de passe administrateur pour SUPPRIMER la soumission de « ${center.name} » (remet à zéro ses données de collecte : Outils 1/2/3, Priorisation, Plan, Évaluateurs, Photos) :`);
+  if(pass === null) return;
+  if(pass !== getAdminPass()){ alert("Mot de passe incorrect. Suppression annulée."); return; }
+  if(!confirm(`Dernière confirmation : supprimer définitivement la soumission de « ${center.name} » ? Cette action est irréversible.`)) return;
+  const fresh = defaultFsData();
+  saveFsData(centerId, fresh);
+  if(currentCenterId === centerId){ currentFsData = fresh; }
+  document.getElementById('fsReportOverlay').style.display = "none";
+  alert(`La soumission de « ${center.name} » a été supprimée.`);
+  renderTracking(); renderAggregates(); renderAllTools();
 }
 document.getElementById('fileImportSubmissions').addEventListener('change', (e) => {
   const files = Array.from(e.target.files || []);
@@ -3966,7 +4010,9 @@ if('serviceWorker' in navigator){
 /* =========================================================================
    RAPPORT COMPLET PAR FS (modal, accessible depuis le Suivi admin)
    ========================================================================= */
+let fsReportCurrentCenterId = null;
 function openFsReport(centerId){
+  fsReportCurrentCenterId = centerId;
   const center = centers.find(c => c.id === centerId);
   if(!center){ alert("FS introuvable."); return; }
   const fsData = loadFsData(centerId);
@@ -4063,6 +4109,8 @@ function openFsReport(centerId){
 document.getElementById('btnCloseFsReport').addEventListener('click', () => { document.getElementById('fsReportOverlay').style.display = "none"; });
 document.getElementById('fsReportOverlay').addEventListener('click', (e) => { if(e.target.id === 'fsReportOverlay') document.getElementById('fsReportOverlay').style.display = "none"; });
 document.getElementById('btnPrintFsReport').addEventListener('click', () => window.print());
+document.getElementById('btnEditFsReport').addEventListener('click', () => { if(fsReportCurrentCenterId) editSubmission(fsReportCurrentCenterId); });
+document.getElementById('btnDeleteFsReport').addEventListener('click', () => { if(fsReportCurrentCenterId) deleteSubmission(fsReportCurrentCenterId); });
 </script>
 </body>
 </html>
