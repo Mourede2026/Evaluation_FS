@@ -124,6 +124,27 @@ input.input-warning{border-color:#d97706 !important; background:#fff8ec !importa
 .eval-weeks-grid label:has(input:checked){background:var(--teal-light); border-color:var(--teal); font-weight:700;}
 .eval-weeks-grid input{margin:0;}
 @media (max-width:640px){.eval-weeks-grid{grid-template-columns:repeat(7,1fr);}}
+
+.fs-report-overlay{position:fixed; inset:0; background:rgba(15,25,35,.65); z-index:200; display:flex; align-items:center; justify-content:center; padding:18px;}
+.fs-report-modal{background:#fff; border-radius:10px; width:min(1100px,100%); max-height:92vh; display:flex; flex-direction:column; overflow:hidden; box-shadow:0 20px 60px rgba(0,0,0,.35);}
+.fs-report-head{background:var(--navy); color:#fff; padding:14px 20px; display:flex; align-items:center; justify-content:space-between; gap:12px; flex:none;}
+.fs-report-head h2{margin:0; font-size:16px;}
+.fs-report-body{overflow-y:auto; padding:20px 24px 30px;}
+.fs-report-section{margin-bottom:26px;}
+.fs-report-section h3{color:var(--navy); font-size:14px; border-bottom:2px solid var(--teal); padding-bottom:6px; margin:0 0 12px;}
+.fs-report-body table{width:100%; border-collapse:collapse; font-size:12.5px; margin-bottom:10px;}
+.fs-report-body th,.fs-report-body td{border:1px solid var(--line); padding:6px 8px; text-align:left;}
+.fs-report-body th{background:var(--teal-light); color:var(--navy);}
+.fs-report-domain-title{background:var(--navy); color:#fff; padding:6px 10px; font-weight:700; font-size:12.5px; margin:14px 0 6px; border-radius:4px;}
+.fs-report-body ul{margin:4px 0 10px 18px; padding:0; font-size:12.5px;}
+.fs-report-photo{max-width:220px; border-radius:6px; border:1px solid var(--line); margin:6px 8px 6px 0;}
+@media print{
+  body *{visibility:hidden;}
+  .fs-report-overlay, .fs-report-overlay *{visibility:visible;}
+  .fs-report-overlay{position:absolute; inset:0; background:#fff; padding:0;}
+  .fs-report-modal{max-height:none; box-shadow:none; width:100%;}
+  .fs-report-head button, .fs-report-head{display:none !important;}
+}
 input[type=number], input[type=text], input[type=password], input[type=date], select, textarea{
   width:100%; padding:6px 7px; border:1px solid var(--line); border-radius:5px; font-size:12.8px; font-family:inherit; background:#fff;
 }
@@ -160,16 +181,6 @@ table.admin-table th, table.admin-table td{font-size:12px;}
 .row-actions{display:flex; gap:6px;}
 .icon-btn{border:1px solid var(--line); background:#fff; border-radius:5px; padding:4px 8px; cursor:pointer; font-size:12px;}
 .icon-btn:hover{background:#fdecea; border-color:#ecc; color:var(--red);}
-
-.modal-overlay{position:fixed; inset:0; background:rgba(15,30,40,.55); z-index:300; display:flex; align-items:center; justify-content:center; padding:20px;}
-.modal-box{background:#fff; border-radius:10px; max-width:900px; width:100%; max-height:88vh; display:flex; flex-direction:column; box-shadow:0 10px 40px rgba(0,0,0,.3);}
-.modal-head{display:flex; align-items:center; justify-content:space-between; padding:14px 18px; border-bottom:1px solid var(--line);}
-.modal-head h2{margin:0; font-size:16px;}
-.modal-body{padding:16px 18px; overflow-y:auto;}
-.modal-body table{width:100%; border-collapse:collapse; font-size:12.5px;}
-.modal-body th, .modal-body td{border:1px solid var(--line); padding:5px 8px; text-align:left;}
-.modal-body h3{margin:14px 0 6px; font-size:13.5px; color:var(--navy-2);}
-.modal-body h3:first-child{margin-top:0;}
 
 .lock-screen{padding:60px 20px; text-align:center;}
 .lock-screen .icon{font-size:36px; margin-bottom:10px;}
@@ -554,7 +565,7 @@ footer{text-align:center; font-size:11.5px; color:var(--muted); padding:20px;}
           </div>
           <div style="overflow-x:auto;">
           <table id="trackingTable">
-            <thead><tr><th>Ordre</th><th>FS</th><th>Type</th><th>Commune</th><th>Zone sanitaire</th><th>Date de saisie (évaluateurs)</th><th class="center">Performance globale</th><th class="center">Priorisation</th><th class="center">Données envoyées</th></tr></thead>
+            <thead><tr><th>Ordre</th><th>FS</th><th>Type</th><th>Commune</th><th>Zone sanitaire</th><th>Date de saisie (évaluateurs)</th><th class="center">Performance globale</th><th class="center">Priorisation</th><th class="center">Données envoyées</th><th class="center">Détail</th></tr></thead>
             <tbody id="trackingBody"></tbody>
           </table>
           </div>
@@ -610,6 +621,32 @@ footer{text-align:center; font-size:11.5px; color:var(--muted); padding:20px;}
             <tbody id="zonePrioBody"></tbody>
           </table>
           </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Synthèse qualitative (points forts / à améliorer / recommandations) — par Commune</h2>
+        <div class="body">
+          <div class="fs-toolbar" style="margin-bottom:12px;">
+            <label style="font-weight:700;font-size:13px;color:var(--navy);">Commune :</label>
+            <select id="communeSynthSelect"></select>
+          </div>
+          <p class="hint">Regroupe, domaine par domaine, ce que chaque FS de la commune a renseigné dans sa Priorisation.</p>
+          <div id="communeSynthEmpty" class="empty-state">Aucune FS avec commune renseignée.</div>
+          <div id="communeSynthBody"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Synthèse qualitative (points forts / à améliorer / recommandations) — par Zone sanitaire</h2>
+        <div class="body">
+          <div class="fs-toolbar" style="margin-bottom:12px;">
+            <label style="font-weight:700;font-size:13px;color:var(--navy);">Zone sanitaire :</label>
+            <select id="zoneSynthSelect"></select>
+          </div>
+          <p class="hint">Regroupe, domaine par domaine, ce que chaque FS de la zone a renseigné dans sa Priorisation.</p>
+          <div id="zoneSynthEmpty" class="empty-state">Aucune FS avec zone sanitaire renseignée.</div>
+          <div id="zoneSynthBody"></div>
         </div>
       </div>
     </div>
@@ -860,13 +897,16 @@ footer{text-align:center; font-size:11.5px; color:var(--muted); padding:20px;}
 
 <footer>Outil de collecte hors-ligne — les données sont conservées localement dans votre navigateur. Pensez à exporter régulièrement une sauvegarde (.json) et à envoyer vos soumissions à l'administrateur.</footer>
 
-<div id="submissionModalOverlay" class="modal-overlay" style="display:none;">
-  <div class="modal-box">
-    <div class="modal-head">
-      <h2 id="submissionModalTitle">Données envoyées</h2>
-      <button type="button" class="icon-btn" id="btnCloseSubmissionModal" title="Fermer">✕</button>
+<div id="fsReportOverlay" class="fs-report-overlay" style="display:none;">
+  <div class="fs-report-modal">
+    <div class="fs-report-head">
+      <h2 id="fsReportTitle">Détail de la FS</h2>
+      <div style="display:flex; gap:8px;">
+        <button type="button" class="btn btn-outline" id="btnPrintFsReport">🖨️ Imprimer / PDF</button>
+        <button type="button" class="btn btn-ghost" id="btnCloseFsReport" style="background:rgba(255,255,255,.15);">✕ Fermer</button>
+      </div>
     </div>
-    <div class="modal-body" id="submissionModalBody"></div>
+    <div class="fs-report-body" id="fsReportBody"></div>
   </div>
 </div>
 
@@ -1347,6 +1387,11 @@ function applyRemoteFsRows(tables){
 
 async function pullFromBackend(force){
   if(!backendConfigured()) return;
+  // Pendant que l'administrateur est sur sa page, on ne reçoit plus les mises à jour
+  // automatiquement : ça évite que sa saisie en cours soit écrasée ou que l'affichage
+  // se rafraîchisse sous ses yeux. La synchronisation reprend quand il clique sur
+  // « Enregistrer » (force=true) ou qu'il quitte la page Administrateur.
+  if(adminEditMode && !force) return;
   try{
     const since = localStorage.getItem(LS_LAST_SYNC) || "0";
     const auth = authParams();
@@ -1356,20 +1401,7 @@ async function pullFromBackend(force){
     const json = await res.json();
     if(json.error){ console.warn('Erreur backend :', json.error); return; }
     const t = json.tables || {};
-    let changed = false;
-    // Tables « propriété » de l'administrateur (centres, comptes, gestionnaires ZS,
-    // paramètres) : on ne les fusionne que si l'administrateur n'est pas en train de
-    // les modifier, pour ne jamais écraser une saisie en cours. La synchronisation
-    // de ces tables reprend dès qu'il clique sur « Enregistrer » (force=true) ou
-    // qu'il quitte la page Administrateur.
-    if(!adminEditMode || force){
-      if(applyRemoteLookups(t)) changed = true;
-    }
-    // Données de terrain (Outils, synthèse, plan, statut « Données envoyées »...) :
-    // elles appartiennent aux évaluateurs, jamais à l'administrateur, donc on peut
-    // les recevoir en continu — y compris pendant que l'administrateur consulte son
-    // tableau de bord — pour que le statut d'envoi et les indicateurs s'actualisent
-    // en temps quasi réel, sans jamais perturber sa propre saisie.
+    let changed = applyRemoteLookups(t);
     applyRemoteFsRows(t);
     if(Object.keys(t).some(k => t[k] && t[k].length)) changed = true;
     if(json.serverTime) localStorage.setItem(LS_LAST_SYNC, String(json.serverTime));
@@ -1384,25 +1416,6 @@ function isEditingActiveField(){
 }
 function onRemoteDataChanged(){
   if(!ROLE) return;
-  // Tableau de bord Administrateur (Suivi des soumissions + agrégats) : ce sont des
-  // affichages en lecture seule, distincts des champs de saisie ; on peut donc les
-  // rafraîchir immédiatement, même si l'administrateur est sur sa page ou en train
-  // de modifier un autre champ (ex. les données centralisées). C'est ce qui fait
-  // apparaître le statut « Données envoyées » et actualise les indicateurs en
-  // quelques secondes après l'envoi d'une équipe.
-  if(hasAdminAccess()){
-    renderTracking();
-    renderAggregates();
-    // Le reste du tableau de bord (liste des FS, comptes équipes/ZS, données
-    // centralisées) contient des champs éditables : on ne le reconstruit que si
-    // l'administrateur n'est pas au milieu d'une saisie dessus, pour ne jamais lui
-    // faire perdre le focus. C'est ce qui manquait pour qu'un nouvel appareil,
-    // fraîchement connecté et vide, affiche bien la configuration reçue du serveur
-    // (centres, comptes...) sans attendre un changement d'onglet manuel.
-    if(!isEditingActiveField()){
-      renderAdmin(); renderUsers(); renderZsManagers(); renderOverrides(); renderAdminSrc();
-    }
-  }
   // Ne jamais interrompre une saisie en cours (Outil 1/2/3, Priorisation, Plan...) :
   // les données reçues du serveur sont déjà appliquées et enregistrées localement
   // (voir applyRemoteLookups/applyRemoteFsRows, appelés avant cette fonction) ; seul
@@ -1424,7 +1437,6 @@ document.addEventListener('focusout', () => {
   setTimeout(() => {
     if(isEditingActiveField()) return; // toujours en train de saisir ailleurs : on retentera au prochain changement de focus
     pendingRenderAfterFocus = false;
-    if(hasAdminAccess()){ renderAdmin(); renderUsers(); renderZsManagers(); renderOverrides(); renderAdminSrc(); }
     refreshFsSelect();
     renderAllTools();
   }, 150);
@@ -1440,12 +1452,7 @@ let syncPollTimer = null;
 function startSyncPolling(){
   if(syncPollTimer) clearInterval(syncPollTimer);
   if(!backendConfigured()) { updateSyncIndicator(); return; }
-  // force=true sur cette toute première synchronisation après connexion : sur
-  // l'onglet Administration, openTab('admin') a déjà pu passer adminEditMode à
-  // true avant qu'on arrive ici, ce qui bloquerait sinon la réception des centres,
-  // des comptes et du mot de passe administrateur à jour — en particulier sur un
-  // tout nouvel appareil/navigateur qui n'a encore rien en local.
-  pullFromBackend(true);
+  pullFromBackend();
   syncPollTimer = setInterval(pullFromBackend, 8000); // quasi temps réel : toutes les 8s
   updateSyncIndicator();
 }
@@ -1782,39 +1789,12 @@ function loginPaneIdFor(tab){
 
 function showLoginError(msg){ loginError.textContent = msg; loginError.style.display = ""; }
 
-document.getElementById('btnAdminLogin').addEventListener('click', async () => {
+document.getElementById('btnAdminLogin').addEventListener('click', () => {
   const pass = document.getElementById('adminLoginPassword').value;
-  if(pass === getAdminPass()){ startSession('admin', null); return; }
-  if(!backendConfigured()){ showLoginError("Mot de passe administrateur incorrect."); return; }
-  // Le mot de passe ne correspond pas à la copie locale : sur un nouvel appareil/
-  // navigateur (rien en local), ou si le mot de passe a été changé ailleurs depuis,
-  // on vérifie une dernière fois auprès du serveur avant de refuser l'accès.
-  const btn = document.getElementById('btnAdminLogin');
-  const originalLabel = btn.textContent;
-  btn.disabled = true; btn.textContent = "Vérification…";
-  loginError.style.display = "none";
-  try{
-    await refreshAdminConfigFromServer();
-    if(pass === getAdminPass()){ startSession('admin', null); }
-    else showLoginError("Mot de passe administrateur incorrect.");
-  } finally {
-    btn.disabled = false; btn.textContent = originalLabel;
-  }
+  if(pass === getAdminPass()){
+    startSession('admin', null);
+  } else showLoginError("Mot de passe administrateur incorrect.");
 });
-// Récupère depuis le serveur les tables « propriété » de l'administrateur (centres,
-// comptes équipes/gestionnaires ZS, mot de passe et paramètres généraux), pour
-// qu'un nouvel appareil retrouve immédiatement toute la configuration existante.
-async function refreshAdminConfigFromServer(){
-  if(!backendConfigured()) return;
-  try{
-    let url = backendUrl + (backendUrl.includes('?') ? '&' : '?') + 'action=pull&secret=' + encodeURIComponent(backendSecret) + '&since=0&role=admin&akey=' + encodeURIComponent(backendAdminKey);
-    const res = await fetch(url);
-    const json = await res.json();
-    if(json.error) return;
-    applyRemoteLookups(json.tables || {});
-    if(json.serverTime) localStorage.setItem(LS_LAST_SYNC, String(json.serverTime));
-  }catch(e){ console.warn('Récupération de la configuration administrateur échouée :', e); }
-}
 document.getElementById('btnUserLogin').addEventListener('click', () => {
   attemptLogin('user', 'btnUserLogin', document.getElementById('userLoginUsername').value.trim(), document.getElementById('userLoginPassword').value);
 });
@@ -1945,14 +1925,6 @@ function enterApp(){
   if(ROLE === 'admin'){
     whoamiBadge.textContent = "Administrateur";
     nav.forEach(b => b.classList.remove('hidden-tab'));
-    // Le compte Administrateur ne doit pas voir les pages de saisie réservées aux
-    // équipes de terrain (Outils, Priorisation, Plan, Photos) : les données lui
-    // parviennent automatiquement via la synchronisation (tableau de suivi, icône
-    // œil). Seules « Administration » et « Graphiques » (lecture seule) restent
-    // visibles.
-    ['outil1','outil3','outil2','priorisation','plan','photos'].forEach(t => {
-      document.querySelector(`nav.tabs button[data-tab="${t}"]`).classList.add('hidden-tab');
-    });
     openTab('admin');
   } else if(ROLE === 'zsmanager'){
     whoamiBadge.textContent = "Gestionnaire ZS : " + (CURRENT_ZSMANAGER ? CURRENT_ZSMANAGER.zone : "");
@@ -2409,68 +2381,16 @@ function renderTracking(){
       <td>${escapeHtml(c.zone||'—')}</td>
       <td class="center">${c.date ? new Date(c.date).toLocaleDateString('fr-FR') : '<span style="color:var(--muted);">—</span>'}</td>
       <td class="center">${denom? fmtPct(pct(total,denom)) : "—"} (${total}/${denom})</td>
-      <td class="center">
-        <span class="badge ${d.locked?'locked':'moyenne'}">${d.locked?'Verrouillée':'En cours'}</span>
-        ${d.locked ? `<button type="button" class="icon-btn" title="Déverrouiller cette FS" data-unlock-center="${c.id}">🔓</button>` : ''}
-      </td>
-      <td class="center">
-        <span class="badge ${d.sent?'sent':'notsent'}">${d.sent ? ('Reçue le '+ (d.sentAt? new Date(d.sentAt).toLocaleDateString('fr-FR')+' à '+new Date(d.sentAt).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}) : '')) : 'Non reçue'}</span>
-        ${d.sent ? `<button type="button" class="icon-btn" title="Voir les données envoyées" data-view-submission="${c.id}">👁️</button>` : ''}
-      </td>
+      <td class="center"><span class="badge ${d.locked?'locked':'moyenne'}">${d.locked?'Verrouillée':'En cours'}</span></td>
+      <td class="center"><span class="badge ${d.sent?'sent':'notsent'}">${d.sent ? ('Reçues le '+ (d.sentAt? new Date(d.sentAt).toLocaleDateString('fr-FR') : '')) : 'Non reçues'}</span></td>
+      <td class="center"><button type="button" class="btn btn-outline" data-view-fs="${c.id}" style="padding:5px 10px;font-size:12px;">👁 Voir</button></td>
     `;
     trackingBody.appendChild(tr);
   });
-}
-trackingBody.addEventListener('click', (e) => {
-  const viewBtn = e.target.closest('[data-view-submission]');
-  if(viewBtn){ openSubmissionView(viewBtn.dataset.viewSubmission); return; }
-  const unlockBtn = e.target.closest('[data-unlock-center]');
-  if(unlockBtn){ unlockCenterFromTracking(unlockBtn.dataset.unlockCenter); return; }
-});
-function unlockCenterFromTracking(centerId){
-  const data = loadFsData(centerId);
-  data.locked = false;
-  saveFsData(centerId, data);
-  if(centerId === currentCenterId){ currentFsData = data; updateLockUi(); renderAllTools(); }
-  renderTracking();
-}
-
-/* --- Fenêtre « Voir les données envoyées » (icône œil, page Suivi) --- */
-const submissionModalOverlay = document.getElementById('submissionModalOverlay');
-function openSubmissionView(centerId){
-  const c = centers.find(x => x.id === centerId);
-  if(!c) return;
-  const data = loadFsData(centerId);
-  const effInp = effInputs(c, data);
-  const domainScores = computeDomainScores(c, effInp);
-  const total = totalScore(c, effInp);
-  const denom = totalPlafond(c);
-  const sentAt = data.sentAt ? new Date(data.sentAt).toLocaleDateString('fr-FR') + ' à ' + new Date(data.sentAt).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}) : '—';
-
-  let html = `<p><strong>${escapeHtml(c.name)}</strong> (${escapeHtml(c.type||'')}) — reçue le ${sentAt}</p>`;
-  html += `<p>Performance globale : <strong>${denom? fmtPct(pct(total,denom)) : "—"}</strong> (${total}/${denom})</p>`;
-
-  html += `<h3>Statut par indicateur</h3><table><thead><tr><th>N°</th><th>Intitulé</th><th>Score</th><th>% atteint</th><th>Statut</th></tr></thead><tbody>`;
-  INDICATORS.filter(i => indicatorApplicable(c, i)).forEach(ind => {
-    const inp = effInp[ind.id];
-    const frac = pctAtteintFor(ind, inp);
-    html += `<tr><td>Id ${ind.id}</td><td>${escapeHtml(ind.label)}</td><td>${scoreFor(ind,inp)}/${ind.plafond}</td><td>${fmtPct(frac)}</td><td>${ragLabel(frac)}</td></tr>`;
+  trackingBody.querySelectorAll('[data-view-fs]').forEach(btn => {
+    btn.addEventListener('click', () => openFsReport(btn.dataset.viewFs));
   });
-  html += `</tbody></table>`;
-
-  html += `<h3>Agrégation par domaine</h3><table><thead><tr><th>Domaine</th><th>Score obtenu</th><th>Score plafond</th><th>% performance</th></tr></thead><tbody>`;
-  DOMAINS.forEach(d => {
-    const ds = domainScores[d.key];
-    html += `<tr><td>${escapeHtml(d.label)}</td><td>${ds.na?'N/A':ds.score}</td><td>${ds.na?'—':ds.plafond}</td><td>${ds.na?'—':fmtPct(pct(ds.score,ds.plafond))}</td></tr>`;
-  });
-  html += `</tbody></table>`;
-
-  document.getElementById('submissionModalTitle').textContent = `Données envoyées — ${c.name}`;
-  document.getElementById('submissionModalBody').innerHTML = html;
-  submissionModalOverlay.style.display = 'flex';
 }
-document.getElementById('btnCloseSubmissionModal').addEventListener('click', () => { submissionModalOverlay.style.display = 'none'; });
-submissionModalOverlay.addEventListener('click', (e) => { if(e.target === submissionModalOverlay) submissionModalOverlay.style.display = 'none'; });
 document.getElementById('fileImportSubmissions').addEventListener('change', (e) => {
   const files = Array.from(e.target.files || []);
   if(!files.length) return;
@@ -2541,6 +2461,8 @@ function renderAggregates(){
   renderGroup(zsBody, 'zone');
   renderCommuneChart();
   renderZonePrio();
+  renderCommuneSynth();
+  renderZoneSynth();
 }
 
 /* --- Radar de performance par domaine, agrégé par Commune (vue admin) --- */
@@ -2658,6 +2580,46 @@ function renderZonePrio(){
   });
 }
 zonePrioSelect.addEventListener('change', renderZonePrio);
+
+/* --- Synthèse qualitative agrégée (points forts / à améliorer / recommandations) --- */
+// Regroupe, domaine par domaine, les entrées de Priorisation de chaque FS d'un
+// groupe (commune ou zone), en indiquant de quelle FS provient chaque ligne.
+function renderQualitativeSynthesis(groups, selectEl, emptyElId, bodyElId){
+  const names = Object.keys(groups).sort();
+  const prevVal = selectEl.value;
+  selectEl.innerHTML = names.map(n => `<option value="${escapeAttr(n)}">${escapeHtml(n)} (${groups[n].length} FS)</option>`).join('');
+  if(names.length) selectEl.value = names.includes(prevVal) ? prevVal : names[0];
+  const empty = document.getElementById(emptyElId);
+  const body = document.getElementById(bodyElId);
+  if(!names.length){ empty.style.display=""; body.innerHTML=""; return; }
+  empty.style.display = "none";
+
+  const list = groups[selectEl.value] || [];
+  let html = "";
+  DOMAINS.forEach(d => {
+    const applicable = list.filter(c => !domainFullyNA(c, d.key));
+    if(!applicable.length) return;
+    const forts = [], ameliorer = [], reco = [];
+    applicable.forEach(c => {
+      const fd = loadFsData(c.id);
+      const s = fd.synth[d.key];
+      s.forts.filter(v=>(v||'').trim()).forEach(v => forts.push({fs:c.name, v}));
+      s.ameliorer.filter(v=>(v||'').trim()).forEach(v => ameliorer.push({fs:c.name, v}));
+      s.reco.filter(v=>(v||'').trim()).forEach(v => reco.push({fs:c.name, v}));
+    });
+    if(!forts.length && !ameliorer.length && !reco.length) return;
+    html += `<div class="fs-report-domain-title">${escapeHtml(d.label)}</div>`;
+    const renderList = (title, arr) => arr.length ? `<strong>${title} :</strong><ul>${arr.map(x=>`<li><strong>${escapeHtml(x.fs)}</strong> — ${escapeHtml(x.v)}</li>`).join('')}</ul>` : '';
+    html += renderList('Points forts', forts) + renderList('Points à améliorer', ameliorer) + renderList('Recommandations', reco);
+  });
+  body.innerHTML = html || `<p class="hint">Aucune Priorisation renseignée pour ce groupe pour l'instant.</p>`;
+}
+const communeSynthSelect = document.getElementById('communeSynthSelect');
+const zoneSynthSelect = document.getElementById('zoneSynthSelect');
+function renderCommuneSynth(){ if(hasAdminAccess()) renderQualitativeSynthesis(communeGroups(), communeSynthSelect, 'communeSynthEmpty', 'communeSynthBody'); }
+function renderZoneSynth(){ if(hasAdminAccess()) renderQualitativeSynthesis(zoneGroups(), zoneSynthSelect, 'zoneSynthEmpty', 'zoneSynthBody'); }
+communeSynthSelect.addEventListener('change', renderCommuneSynth);
+zoneSynthSelect.addEventListener('change', renderZoneSynth);
 
 /* --- Réinitialisation (admin) --- */
 document.getElementById('btnResetCollectedData').addEventListener('click', () => {
@@ -3997,6 +3959,106 @@ if('serviceWorker' in navigator){
   });
 }
 
+/* =========================================================================
+   RAPPORT COMPLET PAR FS (modal, accessible depuis le Suivi admin)
+   ========================================================================= */
+function openFsReport(centerId){
+  const center = centers.find(c => c.id === centerId);
+  if(!center){ alert("FS introuvable."); return; }
+  const fsData = loadFsData(centerId);
+  const effInp = effInputs(center, fsData);
+  const domainScores = computeDomainScores(center, effInp);
+  const total = totalScore(center, effInp);
+  const denom = totalPlafond(center);
+
+  let html = "";
+
+  // --- Identification ---
+  html += `<div class="fs-report-section"><h3>Identification</h3>
+    <table><tr><th>Type</th><td>${escapeHtml(center.type||'—')}</td><th>Département</th><td>${escapeHtml(center.departement||'—')}</td></tr>
+    <tr><th>Zone sanitaire</th><td>${escapeHtml(center.zone||'—')}</td><th>Commune</th><td>${escapeHtml(center.commune||'—')}</td></tr>
+    <tr><th>Date de saisie</th><td>${center.date ? new Date(center.date).toLocaleDateString('fr-FR') : '—'}</td>
+    <th>Données envoyées</th><td>${fsData.sent ? ('Oui — ' + (fsData.sentAt? new Date(fsData.sentAt).toLocaleDateString('fr-FR'):'')) : 'Non'}</td></tr></table></div>`;
+
+  // --- Performance globale ---
+  html += `<div class="fs-report-section"><h3>Performance globale</h3>
+    <table><tr><th>Score obtenu</th><th>Score plafond</th><th>% de performance</th></tr>
+    <tr><td>${total}</td><td>${denom}</td><td><strong>${denom? fmtPct(pct(total,denom)) : '—'}</strong></td></tr></table>
+    <table><tr><th>Domaine</th><th>Score</th><th>Plafond</th><th>%</th></tr>
+    ${DOMAINS.map(d => { const ds = domainScores[d.key]; return ds.na ? '' :
+      `<tr><td>${escapeHtml(d.label)}</td><td>${ds.score}</td><td>${ds.plafond}</td><td>${fmtPct(pct(ds.score,ds.plafond))}</td></tr>`; }).join('')}
+    </table></div>`;
+
+  // --- Outil 1 : tous les indicateurs, groupés par domaine ---
+  let outil1Html = `<div class="fs-report-section"><h3>Outil 1 — Indicateurs de performance (détail complet)</h3>`;
+  DOMAINS.forEach(d => {
+    const inds = INDICATORS.filter(i => i.domain === d.key && indicatorApplicable(center, i));
+    if(!inds.length) return;
+    outil1Html += `<div class="fs-report-domain-title">${escapeHtml(d.label)}</div><table><tr><th>Id</th><th>Indicateur</th><th>Numérateur</th><th>Dénominateur</th><th>% atteint</th><th>Score / Plafond</th></tr>`;
+    inds.forEach(ind => {
+      const inp = effInp[ind.id];
+      if(ind.rule === 'oui2'){
+        outil1Html += `<tr><td>${ind.id}</td><td>${escapeHtml(ind.label)}</td><td colspan="2" class="center">${inp.b}</td><td class="center">${fmtPct(pctAtteintFor(ind,inp))}</td><td class="center">${scoreFor(ind,inp)} / ${ind.plafond}</td></tr>`;
+      } else {
+        outil1Html += `<tr><td>${ind.id}</td><td>${escapeHtml(ind.label)}</td><td class="center">${inp.n}</td><td class="center">${inp.d}</td><td class="center">${fmtPct(pctAtteintFor(ind,inp))}</td><td class="center">${scoreFor(ind,inp)} / ${ind.plafond}</td></tr>`;
+      }
+    });
+    outil1Html += `</table>`;
+  });
+  html += outil1Html + `</div>`;
+
+  // --- Outil 3 : sources + discordances ---
+  const effSrc = effSources(center, fsData);
+  html += `<div class="fs-report-section"><h3>Outil 3 — Exactitude des données</h3>
+    <table><tr><th>Source</th><th>SIMR</th><th>Déc. mat.</th><th>Déc. néo.</th><th>Déc. ≥5a</th><th>Total</th></tr>
+    ${EXACT_SOURCES.map((s,idx) => { const r = effSrc[idx]; return `<tr><td>${escapeHtml(s)}</td><td class="center">${r.simr}</td><td class="center">${r.dcm}</td><td class="center">${r.dcn}</td><td class="center">${r.d5}</td><td class="center"><strong>${sourceTotal(r)}</strong></td></tr>`; }).join('')}
+    </table>
+    <table><tr><th>Discordance</th><th>%</th></tr>
+    ${EXACT_DISCORD.map(dc => { const v = discordance(sourceTotal(effSrc[dc.a]), sourceTotal(effSrc[dc.b])); return `<tr><td>${escapeHtml(dc.label)}</td><td class="center">${v===null?'—':fmtPct(v)}</td></tr>`; }).join('')}
+    </table></div>`;
+
+  // --- Priorisation (synthèse) ---
+  let prioHtml = `<div class="fs-report-section"><h3>Priorisation — Synthèse par domaine</h3>`;
+  DOMAINS.forEach(d => {
+    if(domainFullyNA(center, d.key)) return;
+    const s = fsData.synth[d.key];
+    const forts = s.forts.filter(v=>(v||'').trim());
+    const ameliorer = s.ameliorer.filter(v=>(v||'').trim());
+    const reco = s.reco.filter(v=>(v||'').trim());
+    if(!forts.length && !ameliorer.length && !reco.length) return;
+    prioHtml += `<div class="fs-report-domain-title">${escapeHtml(d.label)}</div>`;
+    if(forts.length) prioHtml += `<strong>Points forts :</strong><ul>${forts.map(v=>`<li>${escapeHtml(v)}</li>`).join('')}</ul>`;
+    if(ameliorer.length) prioHtml += `<strong>Points à améliorer :</strong><ul>${ameliorer.map(v=>`<li>${escapeHtml(v)}</li>`).join('')}</ul>`;
+    if(reco.length) prioHtml += `<strong>Recommandations :</strong><ul>${reco.map(v=>`<li>${escapeHtml(v)}</li>`).join('')}</ul>`;
+  });
+  html += prioHtml + `</div>`;
+
+  // --- Plan d'action ---
+  const planRows = (fsData.plan||[]).filter(r => (r.domain||'').trim() || (r.indicateur||'').toString().trim() || (r.activite||'').trim());
+  html += `<div class="fs-report-section"><h3>Plan d'action</h3>` + (planRows.length ?
+    `<table><tr><th>Domaine</th><th>Indicateur</th><th>Point à améliorer</th><th>Cause</th><th>Activité</th><th>Coût</th></tr>
+    ${planRows.map(r => `<tr><td>${escapeHtml(r.domain)}</td><td>${escapeHtml(String(r.indicateur||''))}</td><td>${escapeHtml(r.ameliorer)}</td><td>${escapeHtml(r.cause)}</td><td>${escapeHtml(r.activite)}</td><td>${escapeHtml(String(r.cout||''))}</td></tr>`).join('')}
+    </table>` : `<p class="hint">Aucune ligne renseignée.</p>`) + `</div>`;
+
+  // --- Évaluateurs ---
+  html += `<div class="fs-report-section"><h3>Évaluateurs</h3><table><tr><th>Rôle</th><th>Nom</th><th>Qualification</th><th>Contact</th></tr>
+    ${EVALUATEUR_ROLES.map(r => { const e = fsData.evaluateurs[r.key]||{}; return (e.nom||e.qualif||e.contact) ?
+      `<tr><td>${escapeHtml(r.label)}</td><td>${escapeHtml(e.nom)}</td><td>${escapeHtml(e.qualif)}</td><td>${escapeHtml(e.contact)}</td></tr>` : ''; }).join('') || '<tr><td colspan="4" class="hint">Aucun évaluateur renseigné.</td></tr>'}
+    </table></div>`;
+
+  // --- Photos ---
+  const photosWithData = PHOTO_SLOTS.filter(s => fsData.photos[s.key] && fsData.photos[s.key].data);
+  html += `<div class="fs-report-section"><h3>Photos</h3>` + (photosWithData.length ?
+    photosWithData.map(s => { const p = fsData.photos[s.key]; return `<div style="display:inline-block;text-align:center;"><img class="fs-report-photo" src="${p.data}"><div style="font-size:11px;color:var(--muted);max-width:220px;">${escapeHtml(p.title||s.fixedTitle||'')}</div></div>`; }).join('')
+    : `<p class="hint">Aucune photo.</p>`) + `</div>`;
+
+  document.getElementById('fsReportTitle').textContent = `${center.order}. ${center.name} — Rapport complet`;
+  document.getElementById('fsReportBody').innerHTML = html;
+  document.getElementById('fsReportOverlay').style.display = "flex";
+}
+document.getElementById('btnCloseFsReport').addEventListener('click', () => { document.getElementById('fsReportOverlay').style.display = "none"; });
+document.getElementById('fsReportOverlay').addEventListener('click', (e) => { if(e.target.id === 'fsReportOverlay') document.getElementById('fsReportOverlay').style.display = "none"; });
+document.getElementById('btnPrintFsReport').addEventListener('click', () => window.print());
 </script>
 </body>
 </html>
