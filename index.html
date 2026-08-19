@@ -431,15 +431,17 @@ footer{text-align:center; font-size:11.5px; color:var(--muted); padding:20px;}
           <div style="margin-top:12px; display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
             <button class="btn btn-outline" id="btnAddUser">+ Ajouter une équipe</button>
             <label class="btn btn-outline" style="display:inline-block;">
-              📥 Importer l'assignation des centres (.xlsx / .csv)
+              📥 Importer les équipes (.xlsx / .csv)
               <input type="file" id="fileImportAssignments" accept=".xlsx,.xls,.csv" style="display:none">
             </label>
           </div>
           <p class="hint" style="margin-top:10px;">Format attendu pour l'import : colonnes <code>N° équipe</code>,
-          <code>Nom de l'équipe</code> (facultatif), <code>N° des centres assignés</code> (numéros séparés par des virgules,
-          ex. <code>1,2,5,7</code> — ce sont les mêmes numéros que la colonne « Ordre » de la table des Centres ci-dessus).
+          <code>Nom de l'équipe</code> (facultatif), <code>Identifiant</code> (facultatif), <code>Mot de passe</code>
+          (facultatif), <code>N° des centres assignés</code> (numéros séparés par des virgules, ex. <code>1,2,5,7</code>
+          — ce sont les mêmes numéros que la colonne « Ordre » de la table des Centres ci-dessus).
           Une équipe déjà existante (retrouvée par son numéro) voit sa liste de centres <strong>remplacée</strong> par
-          celle du fichier ; une équipe absente est créée automatiquement.</p>
+          celle du fichier (et son identifiant/mot de passe mis à jour si renseignés) ; une équipe absente est créée
+          automatiquement (identifiant/mot de passe générés si non précisés).</p>
         </div>
       </div>
 
@@ -2322,8 +2324,10 @@ document.getElementById('fileImportAssignments').addEventListener('change', (e) 
     if(err){ alert("Impossible de lire ce fichier : " + err.message); e.target.value = ""; return; }
     if(!rows.length){ alert("Fichier vide."); e.target.value = ""; return; }
     const headerRow = rows[0].map(normalizeHeader);
-    const numIdx = headerRow.findIndex(h => h.includes('equipe') && !h.includes('nom'));
+    const numIdx = headerRow.findIndex(h => h.includes('equipe') && !h.includes('nom') && !h.includes('identifiant') && !h.includes('utilisateur'));
     const nameIdx = headerRow.findIndex(h => h.includes('equipe') && h.includes('nom'));
+    const identIdx = headerRow.findIndex(h => h.includes('identifiant') || h.includes('utilisateur') || h === 'login');
+    const passIdx = headerRow.findIndex(h => h.includes('passe') || h.includes('password'));
     const centresIdx = headerRow.findIndex(h => h.includes('centre'));
     if(numIdx === -1){ alert("Impossible de trouver une colonne 'N° équipe' dans le fichier."); e.target.value = ""; return; }
     if(centresIdx === -1){ alert("Impossible de trouver une colonne 'Centres assignés' dans le fichier."); e.target.value = ""; return; }
@@ -2338,6 +2342,8 @@ document.getElementById('fileImportAssignments').addEventListener('change', (e) 
       const n = parseInt(numRaw);
       if(!n) continue;
       const nameVal = nameIdx !== -1 ? String(row[nameIdx]||'').trim() : '';
+      const identVal = identIdx !== -1 ? String(row[identIdx]||'').trim() : '';
+      const passVal = passIdx !== -1 ? String(row[passIdx]||'').trim() : '';
       const centresRaw = centresIdx !== -1 ? String(row[centresIdx]||'') : '';
       const centerNums = centresRaw.split(/[,;\/]+/).map(s=>s.trim()).filter(Boolean).map(s=>parseInt(s)).filter(x=>!isNaN(x));
       const centerIds = [];
@@ -2352,10 +2358,12 @@ document.getElementById('fileImportAssignments').addEventListener('change', (e) 
       if(u){
         u.centerIds = centerIds;
         if(nameVal) u.teamName = nameVal;
+        if(identVal) u.username = identVal;
+        if(passVal) u.password = passVal;
         updated++;
       } else {
         const createdByZone = ROLE === 'zsmanager' && CURRENT_ZSMANAGER ? CURRENT_ZSMANAGER.zone : null;
-        u = { id: uidU(), teamName: nameVal || `Équipe ${n}`, username: `equipe${n}`, password: Math.random().toString(36).slice(2,8), centerIds, createdByZone };
+        u = { id: uidU(), teamName: nameVal || `Équipe ${n}`, username: identVal || `equipe${n}`, password: passVal || Math.random().toString(36).slice(2,8), centerIds, createdByZone };
         users.push(u);
         created++;
       }
