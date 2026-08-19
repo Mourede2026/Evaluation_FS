@@ -2277,12 +2277,20 @@ function renderUsers(){
   scopedUsers.forEach(u => {
     const tr = document.createElement('tr');
     tr.className = "user-row";
-    const checkboxes = scopedCenters.map(c => `<label><input type="checkbox" data-ucheck="${u.id}" value="${c.id}" ${((u.centerIds||[]).includes(c.id))?'checked':''}> ${c.order}. ${escapeHtml(c.name)}</label>`).join('');
+    // Affectation exclusive : un centre déjà assigné à une AUTRE équipe n'apparaît
+    // plus dans la liste de celle-ci (il reste visible pour l'équipe qui le détient
+    // déjà, pour pouvoir le décocher/le libérer).
+    const takenByOthers = new Set();
+    scopedUsers.forEach(other => { if(other.id !== u.id) (other.centerIds||[]).forEach(cid => takenByOthers.add(cid)); });
+    const availableCenters = scopedCenters.filter(c => !takenByOthers.has(c.id));
+    const checkboxes = availableCenters.map(c => `<label><input type="checkbox" data-ucheck="${u.id}" value="${c.id}" ${((u.centerIds||[]).includes(c.id))?'checked':''}> ${c.order}. ${escapeHtml(c.name)}</label>`).join('');
+    const hiddenCount = scopedCenters.length - availableCenters.length;
     tr.innerHTML = `
       <td><input type="text" value="${escapeAttr(u.teamName)}" data-ufield="teamName"></td>
       <td><input type="text" value="${escapeAttr(u.username)}" data-ufield="username"></td>
       <td><input type="text" value="${escapeAttr(u.password)}" data-ufield="password"></td>
-      <td><div class="checkbox-list">${checkboxes || '<em style="color:var(--muted);font-size:11px;">Aucun centre disponible</em>'}</div></td>
+      <td><div class="checkbox-list">${checkboxes || '<em style="color:var(--muted);font-size:11px;">Aucun centre disponible</em>'}</div>
+        ${hiddenCount ? `<div style="font-size:10.5px;color:var(--muted);margin-top:4px;">${hiddenCount} centre(s) déjà assigné(s) à une autre équipe, masqué(s) ici.</div>` : ''}</td>
       <td class="center"><button class="icon-btn" title="Supprimer">✕</button></td>
     `;
     tr.querySelectorAll('input[data-ufield]').forEach(inp => {
@@ -2294,6 +2302,7 @@ function renderUsers(){
         if(chk.checked) set.add(chk.value); else set.delete(chk.value);
         u.centerIds = Array.from(set);
         markUsersDirty();
+        renderUsers(); // rafraîchit aussi les listes des autres équipes (centre devenu indisponible/de nouveau libre)
       });
     });
     tr.querySelector('.icon-btn').addEventListener('click', () => {
@@ -2331,7 +2340,7 @@ document.getElementById('fileImportAssignments').addEventListener('change', (e) 
     const centresIdx = headerRow.findIndex(h => h.includes('centre'));
     if(numIdx === -1){ alert("Impossible de trouver une colonne 'N° équipe' dans le fichier."); e.target.value = ""; return; }
     if(centresIdx === -1){ alert("Impossible de trouver une colonne 'Centres assignés' dans le fichier."); e.target.value = ""; return; }
-    let updated = 0, created = 0;
+    let updated = 0, created = 0, reassignedTotal = 0;
     const centerNotFound = new Set();
     const scopeCenters = ROLE === 'zsmanager' ? visibleCenters() : centers;
     for(let i=1;i<rows.length;i++){
@@ -2355,6 +2364,16 @@ document.getElementById('fileImportAssignments').addEventListener('change', (e) 
         const m = (x.teamName||'').match(/(\d+)/);
         return m && parseInt(m[1]) === n;
       });
+      // Affectation exclusive : on retire ces centres de toute AUTRE équipe qui les
+      // détenait déjà, pour ne jamais avoir un même centre assigné à deux équipes.
+      let reassigned = 0;
+      users.forEach(other => {
+        if(u && other.id === u.id) return;
+        const before = (other.centerIds||[]).length;
+        other.centerIds = (other.centerIds||[]).filter(cid => !centerIds.includes(cid));
+        reassigned += before - other.centerIds.length;
+      });
+      if(reassigned) reassignedTotal += reassigned;
       if(u){
         u.centerIds = centerIds;
         if(nameVal) u.teamName = nameVal;
@@ -2371,6 +2390,7 @@ document.getElementById('fileImportAssignments').addEventListener('change', (e) 
     saveUsers(users);
     renderUsers();
     let msg = `${created} équipe(s) créée(s), ${updated} mise(s) à jour.`;
+    if(reassignedTotal) msg += `\n${reassignedTotal} centre(s) retiré(s) d'une autre équipe (réaffectation exclusive).`;
     if(centerNotFound.size) msg += `\n\nN° de centre(s) non trouvé(s) (ignorés) : ${Array.from(centerNotFound).sort((a,b)=>a-b).join(', ')}`;
     alert(msg);
     e.target.value = "";
