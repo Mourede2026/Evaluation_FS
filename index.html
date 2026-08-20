@@ -4178,15 +4178,22 @@ function renderReportZoneSelect(){
 }
 
 function chartConfigToPngBytes(config, width, height){
+  const scale = 2; // rendu en haute résolution pour rester net même agrandi/zoomé dans Word
   const canvas = document.createElement('canvas');
-  canvas.width = width; canvas.height = height;
+  canvas.width = width*scale; canvas.height = height*scale;
   const ctx = canvas.getContext('2d');
+  ctx.scale(scale, scale);
   const cfg = JSON.parse(JSON.stringify(config, (k,v) => typeof v === 'function' ? undefined : v));
   cfg.options = cfg.options || {};
   cfg.options.responsive = false;
   cfg.options.animation = false;
   cfg.options.devicePixelRatio = 1;
-  const chart = new Chart(ctx, cfg);
+  cfg.options.plugins = cfg.options.plugins || {};
+  cfg.options.plugins.legend = cfg.options.plugins.legend || {};
+  cfg.options.font = { size: 13 };
+  const chart = new Chart(ctx, Object.assign({}, cfg, { options: Object.assign({}, cfg.options, {} ) }));
+  chart.resize(width, height);
+  chart.update();
   const dataUrl = canvas.toDataURL('image/png');
   chart.destroy();
   return dataUrlToUint8Array(dataUrl);
@@ -4202,6 +4209,7 @@ function dxCell(text, opts){
   opts = opts || {};
   return new docx.TableCell({
     width:{size:opts.width||1200, type:docx.WidthType.DXA},
+    columnSpan: opts.colSpan || undefined,
     shading: opts.header ? {type:docx.ShadingType.CLEAR, fill:"1F4E78"} : (opts.fill ? {type:docx.ShadingType.CLEAR, fill:opts.fill} : undefined),
     verticalAlign: docx.VerticalAlign.CENTER,
     margins:{top:60,bottom:60,left:100,right:100},
@@ -4216,6 +4224,10 @@ function dxTable(headerRow, rows, colWidths){
   const total = colWidths.reduce((a,b)=>a+b,0);
   return new docx.Table({ rows: trs, width:{size:total,type:docx.WidthType.DXA}, columnWidths: colWidths });
 }
+// Ligne d'en-tête de domaine, fusionnée sur toute la largeur du tableau (colSpan)
+function dxDomainRow(label, nCols, colWidths){
+  return new docx.TableRow({ children:[ dxCell(label, {header:true, colSpan:nCols, width: colWidths.reduce((a,b)=>a+b,0)}) ] });
+}
 function dxHeading(text, level){ return new docx.Paragraph({ text, heading: level, spacing:{before:260, after:140} }); }
 function dxP(text, opts){
   opts = opts || {};
@@ -4223,6 +4235,13 @@ function dxP(text, opts){
 }
 function dxBullets(items){
   return items.map(t => new docx.Paragraph({ children:[ new docx.TextRun({text:t, size:20}) ], bullet:{level:0}, spacing:{after:60} }));
+}
+// Petit tableau de données sous un graphique : comme Word ne peut pas rendre un
+// graphique Chart.js "modifiable" nativement, on fournit systématiquement les
+// valeurs sources juste en dessous — l'utilisateur peut s'en servir pour
+// recréer un graphique Word natif (Insertion > Graphique) s'il veut l'éditer.
+function dxChartDataTable(labels, values, valueLabel){
+  return dxTable([ "Élément", valueLabel ], labels.map((l,i)=>[l, values[i]+"%"]), [5200, 1800]);
 }
 
 async function generateZoneReport(){
@@ -4319,14 +4338,16 @@ async function generateZoneReport(){
       // Radar de performance par domaine
       const applicableDomains = DOMAINS.filter(d => !domainScores[d.key].na);
       if(applicableDomains.length){
+        const radarValues = applicableDomains.map(d => Math.round(pct(domainScores[d.key].score, domainScores[d.key].plafond)*100));
         const radarBytes = chartConfigToPngBytes({
           type:'radar',
           data:{ labels: applicableDomains.map(d=>d.label), datasets:[{ label: c.name,
-            data: applicableDomains.map(d => Math.round(pct(domainScores[d.key].score, domainScores[d.key].plafond)*100)),
-            backgroundColor:'rgba(27,138,122,0.28)', borderColor:'#1b8a7a', borderWidth:2, pointBackgroundColor:'#1b8a7a', pointRadius:2 }] },
-          options:{ plugins:{legend:{display:false}}, scales:{ r:{min:0,max:100, ticks:{stepSize:20}, pointLabels:{font:{size:8}}} } }
-        }, 520, 380);
-        children.push(new D.Paragraph({ children:[ new D.ImageRun({ data: radarBytes, transformation:{width:340, height:248}, type:"png" }) ], alignment:D.AlignmentType.CENTER, spacing:{before:120, after:120} }));
+            data: radarValues,
+            backgroundColor:'rgba(27,138,122,0.28)', borderColor:'#1b8a7a', borderWidth:2, pointBackgroundColor:'#1b8a7a', pointRadius:3 }] },
+          options:{ plugins:{legend:{display:false}}, scales:{ r:{min:0,max:100, ticks:{stepSize:20}, pointLabels:{font:{size:11}}} } }
+        }, 620, 460);
+        children.push(new D.Paragraph({ children:[ new D.ImageRun({ data: radarBytes, transformation:{width:460, height:342}, type:"png" }) ], alignment:D.AlignmentType.CENTER, spacing:{before:120, after:100} }));
+        children.push(dxChartDataTable(applicableDomains.map(d=>d.label), radarValues, "% de performance"));
       }
       children.push(dxP("Commentaire formation sanitaire " + c.name + " : [à compléter]", {italics:true, color:"777777"}));
     });
@@ -4349,7 +4370,8 @@ async function generateZoneReport(){
 
     // Performance globale par FS
     children.push(dxP("Performance globale des formations sanitaires de la zone", {bold:true}));
-    children.push(new docx.Paragraph({ children:[ new docx.ImageRun({ data: barChartBytes(fsSummaries.map(f=>f.name), fsSummaries.map(f=>f.globalPct), '#1f4e78', '% de performance'), transformation:{width:440, height: Math.max(160, 24*fsSummaries.length)}, type:"png" }) ], alignment:docx.AlignmentType.CENTER, spacing:{after:100} }));
+    children.push(new docx.Paragraph({ children:[ new docx.ImageRun({ data: barChartBytes(fsSummaries.map(f=>f.name), fsSummaries.map(f=>f.globalPct), '#1f4e78', '% de performance'), transformation:{width:600, height: Math.max(220, 32*fsSummaries.length)}, type:"png" }) ], alignment:docx.AlignmentType.CENTER, spacing:{after:100} }));
+    children.push(dxChartDataTable(fsSummaries.map(f=>f.name), fsSummaries.map(f=>f.globalPct), "% de performance"));
     {
       const bw = bestWorst(fsSummaries, 'globalPct', true);
       children.push(dxP(`La performance moyenne de la zone est de ${avg(fsSummaries,'globalPct')}%. La formation sanitaire la plus performante est ${bw.best.name} (${bw.best.globalPct}%), et la moins performante est ${bw.worst.name} (${bw.worst.globalPct}%). [Commentaire à compléter/adapter.]`, {italics:true}));
@@ -4357,7 +4379,8 @@ async function generateZoneReport(){
 
     // Discordance CSE / DHIS2
     children.push(dxP("Niveau de discordance entre les données des rapports CSE et le DHIS2", {bold:true}));
-    children.push(new docx.Paragraph({ children:[ new docx.ImageRun({ data: barChartBytes(fsSummaries.map(f=>f.name), fsSummaries.map(f=>f.discCseDhis2Pct), '#c0392b', 'Discordance (%)'), transformation:{width:440, height: Math.max(160, 24*fsSummaries.length)}, type:"png" }) ], alignment:docx.AlignmentType.CENTER, spacing:{after:100} }));
+    children.push(new docx.Paragraph({ children:[ new docx.ImageRun({ data: barChartBytes(fsSummaries.map(f=>f.name), fsSummaries.map(f=>f.discCseDhis2Pct), '#c0392b', 'Discordance (%)'), transformation:{width:600, height: Math.max(220, 32*fsSummaries.length)}, type:"png" }) ], alignment:docx.AlignmentType.CENTER, spacing:{after:100} }));
+    children.push(dxChartDataTable(fsSummaries.map(f=>f.name), fsSummaries.map(f=>f.discCseDhis2Pct), "Discordance (%)"));
     {
       const bw = bestWorst(fsSummaries, 'discCseDhis2Pct', false);
       children.push(dxP(`Le niveau moyen de discordance CSE/DHIS2 de la zone est de ${avg(fsSummaries,'discCseDhis2Pct')}%. La meilleure concordance (discordance la plus faible) est observée à ${bw.best.name} (${bw.best.discCseDhis2Pct}%), et la discordance la plus élevée à ${bw.worst.name} (${bw.worst.discCseDhis2Pct}%). [Commentaire à compléter/adapter.]`, {italics:true}));
@@ -4365,7 +4388,8 @@ async function generateZoneReport(){
 
     // Discordance fiche / rapport
     children.push(dxP("Niveau de discordance entre les fiches et les rapports des formations sanitaires", {bold:true}));
-    children.push(new docx.Paragraph({ children:[ new docx.ImageRun({ data: barChartBytes(fsSummaries.map(f=>f.name), fsSummaries.map(f=>f.discFicheRapportPct), '#c0392b', 'Discordance (%)'), transformation:{width:440, height: Math.max(160, 24*fsSummaries.length)}, type:"png" }) ], alignment:docx.AlignmentType.CENTER, spacing:{after:100} }));
+    children.push(new docx.Paragraph({ children:[ new docx.ImageRun({ data: barChartBytes(fsSummaries.map(f=>f.name), fsSummaries.map(f=>f.discFicheRapportPct), '#c0392b', 'Discordance (%)'), transformation:{width:600, height: Math.max(220, 32*fsSummaries.length)}, type:"png" }) ], alignment:docx.AlignmentType.CENTER, spacing:{after:100} }));
+    children.push(dxChartDataTable(fsSummaries.map(f=>f.name), fsSummaries.map(f=>f.discFicheRapportPct), "Discordance (%)"));
     {
       const bw = bestWorst(fsSummaries, 'discFicheRapportPct', false);
       children.push(dxP(`Le niveau moyen de discordance fiche/rapport de la zone est de ${avg(fsSummaries,'discFicheRapportPct')}%. La meilleure concordance est observée à ${bw.best.name} (${bw.best.discFicheRapportPct}%), et la discordance la plus élevée à ${bw.worst.name} (${bw.worst.discFicheRapportPct}%). [Commentaire à compléter/adapter.]`, {italics:true}));
@@ -4375,12 +4399,13 @@ async function generateZoneReport(){
     children.push(new docx.Paragraph({ children:[], pageBreakBefore:true }));
     children.push(dxHeading("3.3 Synthèse et priorisation de la zone", docx.HeadingLevel.HEADING_2));
     children.push(dxP("Score agrégé (somme) de toutes les FS de la zone. Priorisation en %."));
-    const prioRows = [];
+    const prioColWidths = [700, 6600, 1800];
+    const prioTrs = [ new docx.TableRow({ children:["N°","Intitulé de l'indicateur","Priorisation"].map((h,i)=>dxCell(h,{header:true, width:prioColWidths[i]})), tableHeader:true }) ];
     DOMAINS.forEach(d => {
       const inds = INDICATORS.filter(i => i.domain === d.key);
       const applicableInds = inds.filter(ind => list.some(c => indicatorApplicable(c, ind)));
       if(!applicableInds.length) return;
-      prioRows.push([{__cellOpts:{fill:"1F4E78", paras:[new docx.Paragraph({children:[new docx.TextRun({text:d.label, bold:true, color:"FFFFFF", size:19})]})]}}, "", ""]);
+      prioTrs.push(dxDomainRow(d.label, 3, prioColWidths));
       applicableInds.forEach(ind => {
         let sc = 0, plafond = 0;
         list.forEach(c => {
@@ -4391,51 +4416,71 @@ async function generateZoneReport(){
           plafond += ind.plafond;
         });
         const frac = plafond ? sc/plafond : 0;
-        prioRows.push([`Id ${ind.id} — ${ind.label}`, "", fmtPct(frac)]);
+        prioTrs.push(new docx.TableRow({ children:[
+          dxCell(String(ind.id), {width:prioColWidths[0]}),
+          dxCell(ind.label, {width:prioColWidths[1]}),
+          dxCell(fmtPct(frac), {width:prioColWidths[2]}),
+        ] }));
       });
     });
-    children.push(dxTable(["N°","Intitulé de l'indicateur","Priorisation"], prioRows.map(r => [r[0], "", r[2]===undefined?"":r[2]]), [700, 6600, 1800]));
+    children.push(new docx.Table({ rows: prioTrs, width:{size:prioColWidths.reduce((a,b)=>a+b,0),type:docx.WidthType.DXA}, columnWidths: prioColWidths }));
     children.push(dxP("Commentaire du niveau des indicateurs : [à compléter]", {italics:true, color:"777777"}));
 
-    /* ---------- GRANDS CONSTATS ET RECOMMANDATIONS ---------- */
+    /* ---------- GRANDS CONSTATS ET RECOMMANDATIONS (par domaine, puis par centre) ---------- */
     children.push(new docx.Paragraph({ children:[], pageBreakBefore:true }));
     children.push(dxHeading("4. Grands constats de l'évaluation et recommandations", docx.HeadingLevel.HEADING_1));
+    const constatsColWidths = [3200, 3200, 3600];
     DOMAINS.forEach(d => {
       const applicable = list.filter(c => !domainFullyNA(c, d.key));
       if(!applicable.length) return;
-      const forts = [], ameliorer = [], reco = [];
-      applicable.forEach(c => {
-        const fd = loadFsData(c.id);
-        const s = fd.synth[d.key];
-        s.forts.filter(v=>(v||'').trim()).forEach(v => forts.push(`${c.name} — ${v}`));
-        s.ameliorer.filter(v=>(v||'').trim()).forEach(v => ameliorer.push(`${c.name} — ${v}`));
-        s.reco.filter(v=>(v||'').trim()).forEach(v => reco.push(`${c.name} — ${v}`));
+      // Ne garder que les centres ayant effectivement renseigné quelque chose pour ce domaine
+      const withData = applicable.filter(c => {
+        const s = loadFsData(c.id).synth[d.key];
+        return s.forts.some(v=>(v||'').trim()) || s.ameliorer.some(v=>(v||'').trim()) || s.reco.some(v=>(v||'').trim());
       });
-      if(!forts.length && !ameliorer.length && !reco.length) return;
-      const mkListCell = (arr) => ({__cellOpts:{ paras: arr.length ? arr.map(t => new docx.Paragraph({ children:[new docx.TextRun({text:t, size:18})], bullet:{level:0}, spacing:{after:40} })) : [new docx.Paragraph({children:[new docx.TextRun({text:"—", size:18})]})] }});
-      children.push(dxTable(["Structure","Points forts","Points à améliorer","Recommandations"],
-        [[{__cellOpts:{fill:"1F4E78", paras:[new docx.Paragraph({children:[new docx.TextRun({text:d.label, bold:true, color:"FFFFFF", size:19})]})]}}, "", "", ""],
-         [ "", mkListCell(forts), mkListCell(ameliorer), mkListCell(reco) ]],
-        [1600, 2400, 2400, 2600]));
+      if(!withData.length) return;
+      children.push(dxHeading(d.label, docx.HeadingLevel.HEADING_2));
+      withData.forEach(c => {
+        const s = loadFsData(c.id).synth[d.key];
+        const forts = s.forts.filter(v=>(v||'').trim());
+        const ameliorer = s.ameliorer.filter(v=>(v||'').trim());
+        const reco = s.reco.filter(v=>(v||'').trim());
+        children.push(dxP(c.name, {bold:true, after:60}));
+        const mkListCell = (arr) => ({__cellOpts:{ paras: arr.length ? arr.map(t => new docx.Paragraph({ children:[new docx.TextRun({text:t, size:18})], bullet:{level:0}, spacing:{after:40} })) : [new docx.Paragraph({children:[new docx.TextRun({text:"—", size:18})]})] }});
+        children.push(dxTable(["Points forts","Points à améliorer","Recommandations"],
+          [[ mkListCell(forts), mkListCell(ameliorer), mkListCell(reco) ]], constatsColWidths));
+      });
     });
 
-    /* ---------- PLAN DE RÉSOLUTION DES PROBLÈMES DE LA ZONE ---------- */
+    /* ---------- PLAN DE RÉSOLUTION DES PROBLÈMES DE LA ZONE (par domaine, puis par centre) ---------- */
     children.push(new docx.Paragraph({ children:[], pageBreakBefore:true }));
     children.push(dxHeading("5. Plan de résolution des problèmes de la zone", docx.HeadingLevel.HEADING_1));
-    const planRowsAll = [];
+    const planColWidths = [2400, 2000, 1800, 2200, 1200];
     let totalCost = 0;
-    list.forEach(c => {
-      const fd = loadFsData(c.id);
-      (fd.plan||[]).forEach(r => {
-        if(!(r.domain||'').trim() && !(r.indicateur||'').toString().trim() && !(r.activite||'').trim()) return;
-        const costNum = parseFloat(String(r.cout||'').replace(/[^\d.,-]/g,'').replace(',','.'));
-        if(!isNaN(costNum)) totalCost += costNum;
-        planRowsAll.push([r.domain||'', `${c.name} — ${r.indicateur||''}`, r.ameliorer||'', r.cause||'', r.activite||'', r.cout||'']);
+    DOMAINS.forEach(d => {
+      // Lignes de plan de tous les centres, rattachées à ce domaine (row.domain contient la clé du domaine, ex. "D1")
+      const byCenter = {};
+      list.forEach(c => {
+        const fd = loadFsData(c.id);
+        const rows = (fd.plan||[]).filter(r => r.domain === d.key && ((r.indicateur||'').toString().trim() || (r.activite||'').trim()));
+        if(rows.length) byCenter[c.id] = { center:c, rows };
+      });
+      const centerIds = Object.keys(byCenter);
+      if(!centerIds.length) return;
+      children.push(dxHeading(d.label, docx.HeadingLevel.HEADING_2));
+      centerIds.forEach(cid => {
+        const { center, rows } = byCenter[cid];
+        children.push(dxP(center.name, {bold:true, after:60}));
+        const tableRows = rows.map(r => {
+          const ind = INDICATORS.find(i => i.id == r.indicateur);
+          const costNum = parseFloat(String(r.cout||'').replace(/[^\d.,-]/g,'').replace(',','.'));
+          if(!isNaN(costNum)) totalCost += costNum;
+          return [ ind ? `Id ${ind.id} — ${ind.label}` : (r.indicateur||''), r.ameliorer||'', r.cause||'', r.activite||'', r.cout||'' ];
+        });
+        children.push(dxTable(["Indicateur","Point à améliorer","Cause/goulot","Activité proposée","Coût estimatif"], tableRows, planColWidths));
       });
     });
-    children.push(dxTable(["Domaine","Indicateurs","Points à améliorer","Cause/goulot","Activité proposée","Coût estimatif"],
-      planRowsAll.length ? planRowsAll : [["(aucune ligne renseignée)","","","","",""]], [1500, 2400, 2000, 1800, 2200, 1200]));
-    children.push(dxP(`Total : ${totalCost ? totalCost.toLocaleString('fr-FR') : 'XX'}`, {bold:true, align:docx.AlignmentType.RIGHT}));
+    children.push(dxP(`Total général : ${totalCost ? totalCost.toLocaleString('fr-FR') : 'XX'}`, {bold:true, align:docx.AlignmentType.RIGHT}));
 
     /* ---------- CONCLUSION ---------- */
     children.push(new docx.Paragraph({ children:[], pageBreakBefore:true }));
