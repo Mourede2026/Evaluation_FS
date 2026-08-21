@@ -2494,10 +2494,24 @@ function deleteSubmission(centerId){
   alert(`La soumission de « ${center.name} » a été supprimée.`);
   renderTracking(); renderAggregates(); renderAllTools();
 }
+// Une FS "non collectée" = aucune donnée réelle saisie (comparable à un centre
+// fraîchement créé, jamais encore rempli par une équipe).
+function isFsDataUncollected(fd){
+  if(fd.sent) return false;
+  if(fd.touched && Object.keys(fd.touched).length) return false;
+  if(fd.touchedSrc && Object.keys(fd.touchedSrc).length) return false;
+  const anySynth = Object.values(fd.synth||{}).some(s => [...(s.forts||[]),...(s.ameliorer||[]),...(s.reco||[])].some(v=>(v||'').trim()));
+  if(anySynth) return false;
+  const anyPlan = (fd.plan||[]).some(r => (r.domain||'').trim() || (r.indicateur||'').toString().trim() || (r.activite||'').trim());
+  if(anyPlan) return false;
+  const anyPhoto = Object.values(fd.photos||{}).some(p => p && p.data);
+  if(anyPhoto) return false;
+  return true;
+}
 document.getElementById('fileImportSubmissions').addEventListener('change', (e) => {
   const files = Array.from(e.target.files || []);
   if(!files.length) return;
-  let done = 0, ok = 0;
+  let done = 0, ok = 0, merged = 0;
   files.forEach(file => {
     const reader = new FileReader();
     reader.onload = () => {
@@ -2505,9 +2519,26 @@ document.getElementById('fileImportSubmissions').addEventListener('change', (e) 
       try{
         const payload = JSON.parse(reader.result);
         if(payload.centerId && payload.data){
-          saveFsData(payload.centerId, payload.data);
-          if(!centers.some(cc => cc.id === payload.centerId)){
-            const stub = {id:payload.centerId, order:centers.length+1, name:payload.centerName||payload.centerId,
+          let targetId = payload.centerId;
+          const existsById = centers.some(cc => cc.id === payload.centerId);
+          if(!existsById){
+            // Pas de correspondance par id (appareil jamais synchronisé) : on cherche
+            // une FS déjà existante portant le MÊME NOM avant de créer un doublon.
+            const byName = payload.centerName ? findCenterByName(payload.centerName) : null;
+            if(byName){
+              const existingFd = loadFsData(byName.id);
+              if(isFsDataUncollected(existingFd)){
+                targetId = byName.id; // FS existante mais vide : on la remplit, pas de doublon
+                merged++;
+              } else if(confirm(`Une FS nommée « ${payload.centerName} » existe déjà et contient déjà des données collectées.\n\nRemplacer ses données par cette soumission importée (au lieu de créer une nouvelle FS en double) ?`)){
+                targetId = byName.id;
+                merged++;
+              }
+            }
+          }
+          saveFsData(targetId, payload.data);
+          if(!centers.some(cc => cc.id === targetId)){
+            const stub = {id:targetId, order:centers.length+1, name:payload.centerName||targetId,
               type:payload.centerType||"Publique", departement:"", zone:(ROLE==='zsmanager'&&CURRENT_ZSMANAGER?CURRENT_ZSMANAGER.zone:""), commune:"", date:""};
             ensureAdminOverrides(stub); ensureAdminSources(stub);
             centers.push(stub);
@@ -2518,7 +2549,9 @@ document.getElementById('fileImportSubmissions').addEventListener('change', (e) 
       }catch(err){ /* fichier ignoré */ }
       if(done === files.length){
         renderAdmin(); refreshFsSelect(); renderAllTools(); renderTracking(); renderAggregates(); renderOverrides(); renderAdminSrc();
-        alert(`${ok} soumission(s) importée(s) sur ${files.length} fichier(s).`);
+        let msg = `${ok} soumission(s) importée(s) sur ${files.length} fichier(s).`;
+        if(merged) msg += `\n${merged} associée(s) à une FS existante du même nom (pas de doublon créé).`;
+        alert(msg);
       }
     };
     reader.readAsText(file);
