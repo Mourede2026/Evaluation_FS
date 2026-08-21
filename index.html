@@ -670,7 +670,12 @@ footer{text-align:center; font-size:11.5px; color:var(--muted); padding:20px;}
             <input type="text" id="reportCommune" placeholder="facultatif" style="max-width:160px;">
           </div>
           <button type="button" class="btn btn-send" id="btnGenerateZoneReport">📄 Générer le rapport (.docx)</button>
+          <button type="button" class="btn btn-primary" id="btnGenerateZoneReportExcel">📊 Générer la version Excel (.xlsx)</button>
           <span id="reportGenStatus" style="margin-left:10px;font-size:12.5px;color:var(--muted);"></span>
+          <p class="hint" style="margin-top:10px;">La version Excel contient, sur des feuilles séparées, tous les
+          tableaux du rapport (résultats par FS, priorisation, grands constats, plan de résolution) ainsi que les
+          données sources de chaque graphique, prêtes à être sélectionnées pour créer un graphique Excel natif et
+          entièrement modifiable (Insertion &gt; Graphique).</p>
         </div>
       </div>
     </div>
@@ -4528,6 +4533,103 @@ async function generateZoneReport(){
   }
 }
 document.getElementById('btnGenerateZoneReport').addEventListener('click', generateZoneReport);
+
+function generateZoneReportExcel(){
+  const statusEl = document.getElementById('reportGenStatus');
+  const zone = document.getElementById('reportZoneSelect').value;
+  if(!zone){ alert("Aucune zone sanitaire sélectionnée."); return; }
+  const list = (zoneGroups()[zone] || []).slice().sort((a,b)=>a.order-b.order);
+  if(!list.length){ alert("Aucune FS trouvée pour cette zone."); return; }
+  statusEl.textContent = "⏳ Génération de la version Excel…";
+  try{
+    const wb = XLSX.utils.book_new();
+
+    // --- Feuille 1 : Résultats par FS (score global, discordances, % par domaine) ---
+    const fsRows = [["FS","Score global (%)","Discordance fiche/rapport (%)","Discordance CSE/DHIS2 (%)", ...DOMAINS.map(d=>d.label)]];
+    const fsSummaries = [];
+    const domainWide = [["FS", ...DOMAINS.map(d=>d.label)]];
+    list.forEach(c => {
+      const fd = loadFsData(c.id);
+      const effInp = effInputs(c, fd);
+      const domainScores = computeDomainScores(c, effInp);
+      const total = totalScore(c, effInp);
+      const denom = totalPlafond(c);
+      const globalPct = denom ? Math.round(pct(total,denom)*100) : 0;
+      const effSrc = effSources(c, fd);
+      const discA = discordance(sourceTotal(effSrc[EXACT_DISCORD[0].a]), sourceTotal(effSrc[EXACT_DISCORD[0].b]));
+      const discB = discordance(sourceTotal(effSrc[EXACT_DISCORD[3].a]), sourceTotal(effSrc[EXACT_DISCORD[3].b]));
+      const discAPct = discA===null?"":Math.round(discA*100);
+      const discBPct = discB===null?"":Math.round(discB*100);
+      const domainVals = DOMAINS.map(d => domainScores[d.key].na ? "" : Math.round(pct(domainScores[d.key].score, domainScores[d.key].plafond)*100));
+      fsRows.push([c.name, globalPct, discAPct, discBPct, ...domainVals]);
+      domainWide.push([c.name, ...domainVals]);
+      fsSummaries.push({ name:c.name, globalPct, discAPct: discAPct===""?0:discAPct, discBPct: discBPct===""?0:discBPct });
+    });
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(fsRows), "Résultats par FS");
+
+    // --- Feuille 2 : données pour graphique de comparaison de zone (barres) ---
+    const compareRows = [["FS","Performance globale (%)","Discordance CSE/DHIS2 (%)","Discordance fiche/rapport (%)"]];
+    fsSummaries.forEach(f => compareRows.push([f.name, f.globalPct, f.discBPct, f.discAPct]));
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(compareRows), "Comparaison zone");
+
+    // --- Feuille 3 : données pour radar par domaine (une ligne par FS, une colonne par domaine) ---
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(domainWide), "Radar par domaine");
+
+    // --- Feuille 4 : Priorisation de la zone ---
+    const prioRows = [["Domaine","N°","Intitulé de l'indicateur","Priorisation (%)"]];
+    DOMAINS.forEach(d => {
+      const inds = INDICATORS.filter(i => i.domain === d.key);
+      const applicableInds = inds.filter(ind => list.some(c => indicatorApplicable(c, ind)));
+      applicableInds.forEach(ind => {
+        let sc = 0, plafond = 0;
+        list.forEach(c => {
+          if(!indicatorApplicable(c, ind)) return;
+          const fd = loadFsData(c.id);
+          const inp = effInputs(c, fd)[ind.id];
+          sc += scoreFor(ind, inp);
+          plafond += ind.plafond;
+        });
+        const frac = plafond ? sc/plafond : 0;
+        prioRows.push([d.label, ind.id, ind.label, Math.round(frac*100)]);
+      });
+    });
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(prioRows), "Priorisation zone");
+
+    // --- Feuille 5 : Grands constats (une ligne par entrée) ---
+    const constatsRows = [["Domaine","FS","Catégorie","Texte"]];
+    DOMAINS.forEach(d => {
+      list.forEach(c => {
+        if(domainFullyNA(c, d.key)) return;
+        const s = loadFsData(c.id).synth[d.key];
+        s.forts.filter(v=>(v||'').trim()).forEach(v => constatsRows.push([d.label, c.name, "Points forts", v]));
+        s.ameliorer.filter(v=>(v||'').trim()).forEach(v => constatsRows.push([d.label, c.name, "Points à améliorer", v]));
+        s.reco.filter(v=>(v||'').trim()).forEach(v => constatsRows.push([d.label, c.name, "Recommandations", v]));
+      });
+    });
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(constatsRows), "Grands constats");
+
+    // --- Feuille 6 : Plan de résolution ---
+    const planRows = [["Domaine","FS","Indicateur","Point à améliorer","Cause/goulot","Activité proposée","Coût estimatif"]];
+    DOMAINS.forEach(d => {
+      list.forEach(c => {
+        const fd = loadFsData(c.id);
+        (fd.plan||[]).filter(r => r.domain === d.key && ((r.indicateur||'').toString().trim() || (r.activite||'').trim())).forEach(r => {
+          const ind = INDICATORS.find(i => i.id == r.indicateur);
+          planRows.push([d.label, c.name, ind ? `Id ${ind.id} — ${ind.label}` : (r.indicateur||''), r.ameliorer||'', r.cause||'', r.activite||'', r.cout||'']);
+        });
+      });
+    });
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(planRows), "Plan de résolution");
+
+    XLSX.writeFile(wb, `Rapport_Evaluation_${zone.replace(/[^\p{L}\p{N}]+/gu,'_')}_${evalYear}.xlsx`);
+    statusEl.textContent = "✓ Version Excel générée et téléchargée.";
+  }catch(err){
+    console.error(err);
+    statusEl.textContent = "";
+    alert("Erreur lors de la génération de la version Excel : " + err.message);
+  }
+}
+document.getElementById('btnGenerateZoneReportExcel').addEventListener('click', generateZoneReportExcel);
 
 </script>
 </body>
