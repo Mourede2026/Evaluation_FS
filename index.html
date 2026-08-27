@@ -3963,6 +3963,55 @@ document.getElementById('btnExportExcel').addEventListener('click', () => {
     }
     groupSheet('commune', 'Par Commune');
     groupSheet('zone', 'Par Zone sanitaire');
+
+    // Légende : intitulé complet de chaque indicateur (utile pour lire la feuille suivante)
+    const legendRows = [["Id","Domaine","Intitulé de l'indicateur","Numérateur (N)","Dénominateur (D) / Valeur","Cible","Score plafond"]];
+    INDICATORS.forEach(ind => {
+      const domLabel = DOMAINS.find(d=>d.key===ind.domain)?.label || ind.domain;
+      legendRows.push([
+        `Id ${ind.id}`, domLabel, ind.label,
+        ind.rule === "oui2" ? "—" : (ind.nLabel || ""),
+        ind.rule === "oui2" ? "Oui/Non" : (ind.dLabel || ""),
+        ind.cible, ind.plafond
+      ]);
+    });
+    const legendWs = XLSX.utils.aoa_to_sheet(legendRows);
+    legendWs['!cols'] = [{wch:8},{wch:14},{wch:60},{wch:34},{wch:34},{wch:14},{wch:10}];
+    XLSX.utils.book_append_sheet(wb, legendWs, "Légende indicateurs");
+
+    // Tableau croisé : une ligne par centre, numérateur/dénominateur de chaque indicateur en colonnes
+    const hdr1 = ["N°","Nom de la FS","Département","Zone sanitaire","Commune"];
+    const hdr2 = ["","","","",""];
+    INDICATORS.forEach(ind => {
+      if(ind.rule === "oui2"){
+        hdr1.push(`Id ${ind.id}`);
+        hdr2.push("Valeur (Oui/Non)");
+      } else {
+        hdr1.push(`Id ${ind.id}`, `Id ${ind.id}`);
+        hdr2.push("Numérateur (N)", "Dénominateur (D)");
+      }
+    });
+    const indRows = [hdr1, hdr2];
+    vc.forEach(c => {
+      const data = loadFsData(c.id);
+      const effInp = effInputs(c, data);
+      const row = [c.order, c.name, c.departement, c.zone, c.commune];
+      INDICATORS.forEach(ind => {
+        const na = !indicatorApplicable(c, ind);
+        const inp = effInp[ind.id];
+        if(ind.rule === "oui2"){
+          row.push(na ? "N/A" : inp.b);
+        } else {
+          row.push(na ? "N/A" : inp.n, na ? "N/A" : inp.d);
+        }
+      });
+      indRows.push(row);
+    });
+    const indWs = XLSX.utils.aoa_to_sheet(indRows);
+    indWs['!cols'] = [{wch:6},{wch:28},{wch:14},{wch:14},{wch:14}].concat(
+      INDICATORS.flatMap(ind => ind.rule === "oui2" ? [{wch:12}] : [{wch:10},{wch:10}])
+    );
+    XLSX.utils.book_append_sheet(wb, indWs, "Indicateurs par centre");
   }
 
   XLSX.writeFile(wb, "Collecte_FS_" + new Date().toISOString().slice(0,10) + ".xlsx");
