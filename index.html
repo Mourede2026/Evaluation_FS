@@ -13,6 +13,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Collecte FS">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/docx@8.5/build/index.umd.min.js"></script>
 <script>
@@ -102,6 +103,11 @@ main{max-width:1260px; margin:0 auto; padding:22px 18px 60px;}
 .card{background:var(--card); border:1px solid var(--line); border-radius:var(--radius); margin-bottom:18px; overflow:hidden;}
 .card h2{margin:0; padding:12px 16px; background:var(--teal-light); color:var(--navy); font-size:14.5px; border-bottom:1px solid var(--line); font-weight:700; display:flex; align-items:center; justify-content:space-between; gap:10px;}
 .excel-btn{font-size:11px; font-weight:700; background:#1f7a3d; color:#fff; border:none; border-radius:14px; padding:4px 10px; cursor:pointer; white-space:nowrap; flex:none;}
+.submissions-dropzone{border:2px dashed var(--line); border-radius:var(--radius); padding:22px 16px; text-align:center; cursor:pointer; transition:background .15s, border-color .15s; background:#fafbfb;}
+.submissions-dropzone:hover{background:#f0f4f3;}
+.submissions-dropzone.dragover{border-color:var(--teal); background:#e8f5f0;}
+.submissions-dropzone-icon{font-size:28px; line-height:1; margin-bottom:6px;}
+.submissions-dropzone-text{font-size:13px; color:var(--ink);}
 .excel-btn:hover{background:#186331;}
 .chart-wrap h3{display:flex; align-items:center; justify-content:space-between; gap:10px;}
 .card .body{padding:16px; overflow-x:auto; -webkit-overflow-scrolling:touch;}
@@ -559,12 +565,18 @@ footer{text-align:center; font-size:11.5px; color:var(--muted); padding:20px;}
         <div class="body">
           <p class="hint">Pour récupérer les données saisies par d'autres équipes sur d'autres appareils, demandez-leur
           d'utiliser le bouton <strong>« ENVOYER LES DONNÉES »</strong> (page Photos &amp; Évaluateurs) qui génère un
-          fichier <code>.json</code> à vous transmettre, puis importez-le ci-dessous en une seule fois (import multiple).</p>
+          fichier <code>.json</code> à vous transmettre. Déposez ensuite ci-dessous, en une seule fois, autant de
+          fichiers <code>.json</code> que vous voulez — ou directement un <code>.zip</code> qui en contient plusieurs.</p>
           <div style="margin-bottom:12px;">
-            <label class="btn btn-outline" style="display:inline-block;">
-              📥 Importer des soumissions reçues (plusieurs fichiers)
-              <input type="file" id="fileImportSubmissions" accept=".json" multiple style="display:none">
-            </label>
+            <div id="submissionsDropZone" class="submissions-dropzone">
+              <div class="submissions-dropzone-icon">📥</div>
+              <div class="submissions-dropzone-text">
+                <strong>Glissez-déposez ici vos fichiers de soumission</strong><br>
+                <span class="hint">.json (plusieurs à la fois) ou .zip — ou cliquez pour parcourir</span>
+              </div>
+              <input type="file" id="fileImportSubmissions" accept=".json,.zip" multiple style="display:none">
+            </div>
+            <div id="submissionsDropStatus" class="hint" style="margin-top:6px;"></div>
           </div>
           <div style="overflow-x:auto;">
           <table id="trackingTable">
@@ -2565,55 +2577,110 @@ function isFsDataUncollected(fd){
   return true;
 }
 document.getElementById('fileImportSubmissions').addEventListener('change', (e) => {
-  const files = Array.from(e.target.files || []);
-  if(!files.length) return;
-  let done = 0, ok = 0, merged = 0;
-  files.forEach(file => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      done++;
-      try{
-        const payload = JSON.parse(reader.result);
-        if(payload.centerId && payload.data){
-          let targetId = payload.centerId;
-          const existsById = centers.some(cc => cc.id === payload.centerId);
-          if(!existsById){
-            // Pas de correspondance par id (appareil jamais synchronisé) : on cherche
-            // une FS déjà existante portant le MÊME NOM avant de créer un doublon.
-            const byName = payload.centerName ? findCenterByName(payload.centerName) : null;
-            if(byName){
-              const existingFd = loadFsData(byName.id);
-              if(isFsDataUncollected(existingFd)){
-                targetId = byName.id; // FS existante mais vide : on la remplit, pas de doublon
-                merged++;
-              } else if(confirm(`Une FS nommée « ${payload.centerName} » existe déjà et contient déjà des données collectées.\n\nRemplacer ses données par cette soumission importée (au lieu de créer une nouvelle FS en double) ?`)){
-                targetId = byName.id;
-                merged++;
-              }
-            }
-          }
-          saveFsData(targetId, payload.data);
-          if(!centers.some(cc => cc.id === targetId)){
-            const stub = {id:targetId, order:centers.length+1, name:payload.centerName||targetId,
-              type:payload.centerType||"Publique", departement:"", zone:(ROLE==='zsmanager'&&CURRENT_ZSMANAGER?CURRENT_ZSMANAGER.zone:""), commune:"", date:""};
-            ensureAdminOverrides(stub); ensureAdminSources(stub);
-            centers.push(stub);
-            saveCenters(centers);
-          }
-          ok++;
-        }
-      }catch(err){ /* fichier ignoré */ }
-      if(done === files.length){
-        renderAdmin(); refreshFsSelect(); renderAllTools(); renderTracking(); renderAggregates(); renderOverrides(); renderAdminSrc();
-        let msg = `${ok} soumission(s) importée(s) sur ${files.length} fichier(s).`;
-        if(merged) msg += `\n${merged} associée(s) à une FS existante du même nom (pas de doublon créé).`;
-        alert(msg);
-      }
-    };
-    reader.readAsText(file);
-  });
+  handleSubmissionFileList(e.target.files);
   e.target.value = "";
 });
+const submissionsDropZone = document.getElementById('submissionsDropZone');
+const submissionsDropStatus = document.getElementById('submissionsDropStatus');
+if(submissionsDropZone){
+  submissionsDropZone.addEventListener('click', () => document.getElementById('fileImportSubmissions').click());
+  ['dragenter','dragover'].forEach(evt => submissionsDropZone.addEventListener(evt, (e) => {
+    e.preventDefault(); e.stopPropagation(); submissionsDropZone.classList.add('dragover');
+  }));
+  ['dragleave','dragend','drop'].forEach(evt => submissionsDropZone.addEventListener(evt, (e) => {
+    e.preventDefault(); e.stopPropagation(); submissionsDropZone.classList.remove('dragover');
+  }));
+  submissionsDropZone.addEventListener('drop', (e) => {
+    const files = e.dataTransfer && e.dataTransfer.files;
+    if(files && files.length) handleSubmissionFileList(files);
+  });
+}
+
+// Traite une sélection de fichiers déposés/choisis : accepte un mélange de .json
+// (chacun = une soumission d'un centre) et de .zip (contenant plusieurs .json à
+// l'intérieur, à n'importe quel niveau de dossier). Tout est ramené à une simple
+// liste de textes JSON avant d'être importé un par un.
+async function handleSubmissionFileList(fileList){
+  const files = Array.from(fileList || []);
+  if(!files.length) return;
+  if(submissionsDropStatus) submissionsDropStatus.textContent = "⏳ Lecture des fichiers…";
+
+  const jsonTexts = []; // { name, text }
+  for(const file of files){
+    const lower = (file.name||'').toLowerCase();
+    if(lower.endsWith('.zip')){
+      if(typeof JSZip === 'undefined'){
+        alert(`Impossible de lire « ${file.name} » : le module de lecture des .zip n'a pas pu se charger (vérifiez la connexion internet), réessayez ou dézippez le fichier manuellement avant de le déposer.`);
+        continue;
+      }
+      try{
+        const buf = await file.arrayBuffer();
+        const zip = await JSZip.loadAsync(buf);
+        const entries = Object.values(zip.files).filter(f => !f.dir && f.name.toLowerCase().endsWith('.json'));
+        for(const entry of entries){
+          const text = await entry.async('string');
+          jsonTexts.push({ name: entry.name, text });
+        }
+      }catch(err){ alert(`Impossible de lire l'archive « ${file.name} » : ${err.message}`); }
+    } else if(lower.endsWith('.json')){
+      try{ jsonTexts.push({ name: file.name, text: await file.text() }); }
+      catch(err){ alert(`Impossible de lire « ${file.name} » : ${err.message}`); }
+    }
+    // autres types de fichiers : ignorés silencieusement (ex. .DS_Store dans un zip)
+  }
+
+  let ok = 0, merged = 0;
+  jsonTexts.forEach(({name, text}) => {
+    try{
+      const payload = JSON.parse(text);
+      const result = importSubmissionPayload(payload);
+      if(result.ok) ok++;
+      if(result.merged) merged++;
+    }catch(err){ console.warn(`Fichier ignoré (${name}) :`, err); }
+  });
+
+  if(ok > 0){
+    renderAdmin(); refreshFsSelect(); renderAllTools(); renderTracking(); renderAggregates(); renderOverrides(); renderAdminSrc();
+  }
+  let msg = `${ok} soumission(s) importée(s) sur ${jsonTexts.length} fichier(s) JSON détecté(s) (${files.length} fichier(s) déposé(s)).`;
+  if(merged) msg += `\n${merged} associée(s) à une FS existante du même nom (pas de doublon créé).`;
+  if(submissionsDropStatus) submissionsDropStatus.textContent = msg.replace(/\n/g, ' — ');
+  alert(msg);
+}
+
+// Importe une soumission déjà parsée (un objet {centerId, centerName, centerType,
+// data, exportedAt}) : retrouve/complète la bonne FS et enregistre ses données.
+// Utilisée à la fois par l'import fichier par fichier et par le glisser-déposer.
+function importSubmissionPayload(payload){
+  if(!payload || !payload.centerId || !payload.data) return {ok:false, merged:false};
+  let targetId = payload.centerId;
+  let merged = false;
+  const existsById = centers.some(cc => cc.id === payload.centerId);
+  if(!existsById){
+    // Pas de correspondance par id (appareil jamais synchronisé) : on cherche
+    // une FS déjà existante portant le MÊME NOM avant de créer un doublon.
+    const byName = payload.centerName ? findCenterByName(payload.centerName) : null;
+    if(byName){
+      const existingFd = loadFsData(byName.id);
+      if(isFsDataUncollected(existingFd)){
+        targetId = byName.id; // FS existante mais vide : on la remplit, pas de doublon
+        merged = true;
+      } else if(confirm(`Une FS nommée « ${payload.centerName} » existe déjà et contient déjà des données collectées.\n\nRemplacer ses données par cette soumission importée (au lieu de créer une nouvelle FS en double) ?`)){
+        targetId = byName.id;
+        merged = true;
+      }
+    }
+  }
+  saveFsData(targetId, payload.data);
+  if(!centers.some(cc => cc.id === targetId)){
+    const stub = {id:targetId, order:centers.length+1, name:payload.centerName||targetId,
+      type:payload.centerType||"Publique", departement:"", zone:(ROLE==='zsmanager'&&CURRENT_ZSMANAGER?CURRENT_ZSMANAGER.zone:""), commune:"", date:""};
+    ensureAdminOverrides(stub); ensureAdminSources(stub);
+    centers.push(stub);
+    saveCenters(centers);
+  }
+  return {ok:true, merged};
+}
 
 /* --- Agrégations par Commune / Zone sanitaire --- */
 const communeBody = document.getElementById('communeBody');
