@@ -1175,6 +1175,7 @@ const LS_USERS = "tdes_users_v1";
 const LS_ZSMANAGERS = "tdes_zsmanagers_v1";
 const LS_EVAL_YEAR = "tdes_eval_year_v1";
 const LS_EVAL_WEEKS = "tdes_eval_weeks_v1";
+const LS_PENDING_PUSH = "tdes_pending_push_v1";
 const DEFAULT_PASS = "admin123";
 const SS_SESSION = "tdes_session_v1"; // {role:'admin'|'user', userId}
 
@@ -1289,6 +1290,9 @@ function flattenFsData(centerId, data){
 }
 
 // Envoie un lot de mises à jour vers le backend. `updates` = { table: [rows...], ... }
+// Ces lots ne contiennent JAMAIS les photos (voir flattenFsData : seul le titre
+// est transmis), donc leur taille reste minime — même en file d'attente, ils ne
+// risquent pas de saturer le stockage local comme le font les photos.
 async function pushTables(updates){
   if(!backendConfigured()) return;
   try{
@@ -1298,8 +1302,37 @@ async function pushTables(updates){
       body: JSON.stringify(Object.assign({ action:'push', secret: backendSecret, updates }, authParams()))
     });
     const json = await res.json();
-    if(json && json.error){ console.warn('Synchronisation (envoi) refusée par le serveur :', json.error); }
-  }catch(e){ console.warn('Synchronisation (envoi) échouée :', e); }
+    if(json && json.error){ console.warn('Synchronisation (envoi) refusée par le serveur :', json.error); queuePendingPush_(updates); }
+  }catch(e){ console.warn('Synchronisation (envoi) échouée, mise en attente pour réessai :', e); queuePendingPush_(updates); }
+}
+
+// File d'attente des envois qui n'ont pas pu partir (ex. téléphone de terrain
+// hors-ligne au moment de la saisie), pour ne perdre aucune donnée : elles
+// seront renvoyées automatiquement dès qu'une connexion sera de nouveau là.
+function loadPendingPushes_(){ try{ return JSON.parse(localStorage.getItem(LS_PENDING_PUSH) || '[]'); }catch(e){ return []; } }
+function savePendingPushes_(list){ try{ localStorage.setItem(LS_PENDING_PUSH, JSON.stringify(list)); }catch(e){ /* file elle-même trop grosse : abandon silencieux, cas extrême */ } }
+function queuePendingPush_(updates){
+  const list = loadPendingPushes_();
+  list.push({ updates, queuedAt: Date.now() });
+  savePendingPushes_(list.slice(-300)); // garde-fou pour ne pas grossir indéfiniment
+}
+async function flushPendingPushes(){
+  if(!backendConfigured()) return;
+  const list = loadPendingPushes_();
+  if(!list.length) return;
+  const remaining = [];
+  for(const item of list){
+    try{
+      const res = await fetch(backendUrl, {
+        method: 'POST',
+        headers: {'Content-Type':'text/plain;charset=utf-8'},
+        body: JSON.stringify(Object.assign({ action:'push', secret: backendSecret, updates: item.updates }, authParams()))
+      });
+      const json = await res.json();
+      if(json && json.error) remaining.push(item);
+    }catch(e){ remaining.push(item); }
+  }
+  savePendingPushes_(remaining);
 }
 
 // Suit les identifiants déjà connus localement pour une collection (centres /
@@ -1487,10 +1520,14 @@ function startSyncPolling(){
   // toujours avoir lieu, même si on atterrit directement sur la page Admin (qui met
   // en pause les synchros suivantes) — sans ça, un admin qui se connecte pour la
   // première fois sur un nouvel appareil ne recevait jamais rien du serveur.
+  flushPendingPushes();
   pullFromBackend(true);
-  syncPollTimer = setInterval(pullFromBackend, 8000); // quasi temps réel : toutes les 8s
+  syncPollTimer = setInterval(() => { flushPendingPushes(); pullFromBackend(); }, 8000); // quasi temps réel : toutes les 8s
   updateSyncIndicator();
 }
+// Dès que l'appareil retrouve une connexion (ex. terrain sans réseau puis retour
+// en zone couverte), on retente immédiatement d'envoyer ce qui était en attente.
+window.addEventListener('online', () => { flushPendingPushes(); pullFromBackend(true); });
 
 // Charge/enregistre une collection (centres/utilisateurs/zsmanagers) en gardant
 // une trace des identifiants déjà connus, pour pouvoir détecter et propager une
@@ -1557,7 +1594,26 @@ function loadFsData(centerId){
   }catch(e){ return defaultFsData(); }
 }
 function saveFsData(centerId, data){
-  try{ localStorage.setItem(LS_DATA_PREFIX + centerId, JSON.stringify(data)); }catch(e){ alert("Erreur d'enregistrement local (quota dépassé ?) : " + e.message); }
+  try{
+    localStorage.setItem(LS_DATA_PREFIX + centerId, JSON.stringify(data));
+  }catch(e){
+    // Quota localStorage dépassé : c'est presque toujours à cause des photos,
+    // qui restent 100% locales sur cet appareil (jamais envoyées au serveur).
+    // On retente sans les photos pour ne pas perdre le reste des données
+    // (indicateurs, synthèse, plan…), qui elles sont synchronisées.
+    try{
+      const lightPhotos = {};
+      Object.keys(data.photos||{}).forEach(k => {
+        const p = data.photos[k] || {};
+        lightPhotos[k] = { title: p.title || "", data: "" };
+      });
+      const lightData = Object.assign({}, data, { photos: lightPhotos });
+      localStorage.setItem(LS_DATA_PREFIX + centerId, JSON.stringify(lightData));
+      alert("Stockage local de cet appareil plein : les photos de ce centre n'ont pas pu être enregistrées (le reste des données — indicateurs, synthèse, plan… — a bien été sauvegardé et envoyé). Supprimez des photos d'autres centres sur cet appareil pour libérer de la place, ou utilisez un autre appareil pour les photos de ce centre.");
+    }catch(e2){
+      alert("Erreur d'enregistrement local (quota dépassé ?) : " + e.message);
+    }
+  }
   pushTables(flattenFsData(centerId, data));
 }
 
