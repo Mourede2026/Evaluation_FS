@@ -1380,7 +1380,25 @@ function saveKnownIds_(key, ids){ try{ localStorage.setItem(key+'_ids_v1', JSON.
 
 // Reconstruit centres/utilisateurs/zsManagers en local à partir des lignes
 // reçues du serveur (ajout/mise à jour/suppression).
-function applyRemoteLookups(tables){
+// Lors d'une relecture COMPLÈTE (since=0), la liste de centres renvoyée par le serveur
+// est la liste de référence pour ce compte : tout centre local qui n'y figure plus
+// (supprimé par l'administrateur, ou plus accessible à ce compte) est retiré. Sans ça,
+// un appareil qui a raté le marqueur de suppression garde le centre indéfiniment.
+// Précaution : on ne le fait pas s'il reste des modifications de centres non envoyées.
+function pendingHasCenters_(){ return loadPendingPushes_().some(it => it.updates && it.updates.centres && it.updates.centres.length); }
+function reconcileCenters_(tables){
+  if(!Array.isArray(tables.centres)) return false;
+  if(dirtyCenters || pendingHasCenters_()) return false;
+  const keep = new Set(tables.centres.filter(r => !isDeletedRow(r)).map(r => r.ID));
+  const before = centers.length;
+  centers = centers.filter(c => keep.has(c.id));
+  if(centers.length === before) return false;
+  try{ localStorage.setItem(LS_CENTERS, JSON.stringify(centers)); }catch(e){}
+  saveKnownIds_(LS_CENTERS, centers.map(c=>c.id));
+  const sp = loadSrvParams_(); Object.keys(sp).forEach(id => { if(!keep.has(id)) delete sp[id]; }); saveSrvParams_(sp);
+  return true;
+}
+function applyRemoteLookups(tables, full){
   let changed = false;
   if(tables.centres && tables.centres.length){
     const byId = {}; centers.forEach(c => byId[c.id] = c);
@@ -1399,6 +1417,7 @@ function applyRemoteLookups(tables){
     saveKnownIds_(LS_CENTERS, centers.map(c=>c.id));
     changed = true;
   }
+  if(full && reconcileCenters_(tables)) changed = true;
   if(tables.utilisateurs && tables.utilisateurs.length){
     const byId = {}; users.forEach(u => byId[u.id] = u);
     tables.utilisateurs.forEach(r => { if(isDeletedRow(r)) delete byId[r.ID]; else byId[r.ID] = rowToUser(r); });
@@ -1501,7 +1520,11 @@ async function pullFromBackend(force){
   // « Enregistrer » (force=true) ou qu'il quitte la page Administrateur.
   if(adminEditMode && !force) return;
   try{
-    const since = localStorage.getItem(LS_LAST_SYNC) || "0";
+    let since = localStorage.getItem(LS_LAST_SYNC) || "0";
+    // Relecture complète toutes les 2 minutes (en plus de celle de chaque connexion) pour que
+    // les centres retirés par l'administrateur disparaissent aussi des tablettes déjà ouvertes.
+    if(ROLE !== 'admin' && Date.now() - (window.__lastFullPull || 0) > 120000) since = "0";
+    const isFull = (since === "0");
     const auth = authParams();
     let url = backendUrl + (backendUrl.includes('?') ? '&' : '?') + 'action=pull&secret=' + encodeURIComponent(backendSecret) + '&since=' + since;
     Object.keys(auth).forEach(k => { url += '&' + k + '=' + encodeURIComponent(auth[k]); });
@@ -1509,8 +1532,9 @@ async function pullFromBackend(force){
     const json = await res.json();
     if(json.error){ console.warn('Erreur backend :', json.error); return; }
     const t = json.tables || {};
-    let changed = applyRemoteLookups(t);
+    let changed = applyRemoteLookups(t, isFull);
     applyRemoteFsRows(t);
+    if(isFull) window.__lastFullPull = Date.now();
     if(Object.keys(t).some(k => t[k] && t[k].length)) changed = true;
     if(json.serverTime) localStorage.setItem(LS_LAST_SYNC, String(json.serverTime));
     if(changed) onRemoteDataChanged(); else updateSyncIndicator(true);
@@ -2015,7 +2039,7 @@ async function verifyAccountOnServer(role, username, pass){
 // appareil n'aient plus besoin de repasser par le serveur.
 function applyServerLoginResult(role, result, selfObj){
   const t = result.json.tables || {};
-  applyRemoteLookups(t);
+  applyRemoteLookups(t, true);
   applyRemoteFsRows(t);
   if(result.json.serverTime) localStorage.setItem(LS_LAST_SYNC, String(result.json.serverTime));
 
