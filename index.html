@@ -1242,10 +1242,23 @@ function authParams(){
 }
 
 /* --- Conversion objets JS <-> lignes de tableur --- */
+// Copie « telle que reçue du serveur » des valeurs figées par l'administrateur
+// (Id 12/19/20 + sources de l'Outil 3). Elle n'est mise à jour QUE par une réception
+// du serveur, jamais par une saisie locale : un compte Équipe qui renvoie la liste
+// des centres (ex. date d'évaluation) renvoie donc toujours ces valeurs intactes
+// et ne peut plus écraser celles de l'administrateur avec une copie périmée/vide.
+const LS_SRV_PARAMS = "tdes_server_params_v1";
+function loadSrvParams_(){ try{ return JSON.parse(localStorage.getItem(LS_SRV_PARAMS)||'{}') || {}; }catch(e){ return {}; } }
+function saveSrvParams_(m){ try{ localStorage.setItem(LS_SRV_PARAMS, JSON.stringify(m)); }catch(e){} }
 function centerToRow(c){
+  let ov = JSON.stringify(c.adminOverrides||{}), ovT = JSON.stringify(c.overridesTouched||{});
+  let src = JSON.stringify(c.adminSources||{}), srcT = JSON.stringify(c.adminSourcesTouched||{});
+  if(ROLE === 'user'){
+    const snap = loadSrvParams_()[c.id];
+    if(snap){ ov = snap.ov; ovT = snap.ovT; src = snap.src; srcT = snap.srcT; }
+  }
   return { ID:c.id, Ordre:c.order, Nom:c.name, Type:c.type, Departement:c.departement, Zone:c.zone, Commune:c.commune, Date:c.date,
-    OverridesJSON: JSON.stringify(c.adminOverrides||{}), OverridesTouchedJSON: JSON.stringify(c.overridesTouched||{}),
-    AdminSourcesJSON: JSON.stringify(c.adminSources||{}), AdminSourcesTouchedJSON: JSON.stringify(c.adminSourcesTouched||{}),
+    OverridesJSON: ov, OverridesTouchedJSON: ovT, AdminSourcesJSON: src, AdminSourcesTouchedJSON: srcT,
     Supprime:'' };
 }
 function safeParseJSON_(s, fallback){ try{ const v = JSON.parse(s); return (v && typeof v === 'object') ? v : fallback; }catch(e){ return fallback; } }
@@ -1323,9 +1336,12 @@ async function pushTables(updates){
 // seront renvoyées automatiquement dès qu'une connexion sera de nouveau là.
 function loadPendingPushes_(){ try{ return JSON.parse(localStorage.getItem(LS_PENDING_PUSH) || '[]'); }catch(e){ return []; } }
 function savePendingPushes_(list){ try{ localStorage.setItem(LS_PENDING_PUSH, JSON.stringify(list)); }catch(e){ /* file elle-même trop grosse : abandon silencieux, cas extrême */ } }
+function identityKey_(){
+  return ROLE + ':' + (ROLE==='user' && CURRENT_USER ? CURRENT_USER.id : (ROLE==='zsmanager' && CURRENT_ZSMANAGER ? CURRENT_ZSMANAGER.id : ''));
+}
 function queuePendingPush_(updates){
   const list = loadPendingPushes_();
-  list.push({ updates, queuedAt: Date.now() });
+  list.push({ updates, queuedAt: Date.now(), owner: identityKey_() });
   savePendingPushes_(list.slice(-300)); // garde-fou pour ne pas grossir indéfiniment
 }
 async function flushPendingPushes(){
@@ -1333,7 +1349,14 @@ async function flushPendingPushes(){
   const list = loadPendingPushes_();
   if(!list.length) return;
   const remaining = [];
-  for(const item of list){
+  const me = identityKey_();
+  for(let item of list){
+    // Un envoi en attente ne repart QUE sous le compte qui l'a créé : sinon des données
+    // périmées d'une équipe seraient rejouées avec les droits de l'administrateur.
+    if(item.owner !== me){
+      if(!item.owner && item.updates && item.updates.centres){ const u = Object.assign({}, item.updates); delete u.centres; item = Object.assign({}, item, {updates:u}); }
+      remaining.push(item); continue;
+    }
     try{
       const res = await fetch(backendUrl, {
         method: 'POST',
@@ -1361,8 +1384,17 @@ function applyRemoteLookups(tables){
   let changed = false;
   if(tables.centres && tables.centres.length){
     const byId = {}; centers.forEach(c => byId[c.id] = c);
-    tables.centres.forEach(r => { if(isDeletedRow(r)) delete byId[r.ID]; else byId[r.ID] = rowToCenter(r); });
+    const srvParams = loadSrvParams_();
+    tables.centres.forEach(r => {
+      if(isDeletedRow(r)){ delete byId[r.ID]; delete srvParams[r.ID]; }
+      else{
+        byId[r.ID] = rowToCenter(r);
+        srvParams[r.ID] = { ov: r.OverridesJSON||'{}', ovT: r.OverridesTouchedJSON||'{}', src: r.AdminSourcesJSON||'{}', srcT: r.AdminSourcesTouchedJSON||'{}' };
+      }
+    });
+    saveSrvParams_(srvParams);
     centers = Object.values(byId);
+    centers.forEach(c => { ensureAdminOverrides(c); ensureAdminSources(c); });
     localStorage.setItem(LS_CENTERS, JSON.stringify(centers));
     saveKnownIds_(LS_CENTERS, centers.map(c=>c.id));
     changed = true;
@@ -2018,6 +2050,10 @@ function startSession(role, userId){
   CURRENT_USER = role === 'user' ? users.find(u=>u.id===userId) : null;
   CURRENT_ZSMANAGER = role === 'zsmanager' ? zsManagers.find(z=>z.id===userId) : null;
   sessionStorage.setItem(SS_SESSION, JSON.stringify({role, userId}));
+  // Le repère de synchro est partagé par tous les comptes du même navigateur : on le
+  // remet à zéro à chaque connexion pour forcer une relecture complète du serveur
+  // (valeurs de l'administrateur comprises) au lieu d'un simple « depuis la dernière fois ».
+  try{ localStorage.setItem(LS_LAST_SYNC, "0"); }catch(e){}
   enterApp();
 }
 
@@ -3942,11 +3978,19 @@ document.getElementById('fileImport').addEventListener('change', (e) => {
     try{
       const payload = JSON.parse(reader.result);
       if(!payload.centers) throw new Error("Format invalide");
-      centers = payload.centers;
-      centers.forEach(c => { ensureAdminOverrides(c); ensureAdminSources(c); });
-      saveCenters(centers);
-      if(payload.users){ users = payload.users; saveUsers(users); }
-      if(payload.zsManagers){ zsManagers = payload.zsManagers; saveZsManagers(zsManagers); }
+      if(ROLE === 'admin'){
+        centers = payload.centers;
+        centers.forEach(c => { ensureAdminOverrides(c); ensureAdminSources(c); });
+        saveCenters(centers);
+        if(payload.users){ users = payload.users; saveUsers(users); }
+        if(payload.zsManagers){ zsManagers = payload.zsManagers; saveZsManagers(zsManagers); }
+      } else {
+        // Hors administrateur : un fichier de sauvegarde ne restaure que les saisies de terrain
+        // des FS visibles. Il ne remplace ni la liste des centres, ni les comptes, ni les
+        // valeurs figées par l'administrateur (sinon une sauvegarde ancienne les écraserait).
+        const allowed = new Set(visibleCenters().map(c => c.id));
+        Object.keys(payload.data||{}).forEach(cid => { if(!allowed.has(cid)) delete payload.data[cid]; });
+      }
       Object.keys(payload.data||{}).forEach(cid => {
         localStorage.setItem(LS_DATA_PREFIX + cid, JSON.stringify(payload.data[cid]));
       });
