@@ -2762,15 +2762,15 @@ function renderAggregates(){
     tbody.innerHTML = "";
     Object.keys(groups).sort().forEach(key => {
       const list = groups[key];
-      let sumFrac = 0, nSent = 0;
+      let sumFrac = 0, nSent = 0, nCalc = 0;
       list.forEach(c => {
         const d = loadFsData(c.id);
         const total = totalScore(c, effInputs(c, d));
         const denom = totalPlafond(c);
-        sumFrac += pct(total, denom);
+        if(denom > 0){ sumFrac += pct(total, denom); nCalc++; }   // FS sans indicateur applicable : non comptée
         if(d.sent) nSent++;
       });
-      const avg = list.length ? sumFrac / list.length : 0;
+      const avg = nCalc ? sumFrac / nCalc : 0;
       const tr = document.createElement('tr');
       tr.innerHTML = `<td>${escapeHtml(key)}</td><td class="center">${list.length}</td><td class="center">${fmtPct(avg)}</td><td class="center">${nSent}/${list.length}</td>`;
       tbody.appendChild(tr);
@@ -3587,7 +3587,7 @@ function renderCharts(){
   }catch(err){ console.error('Graphique exactitude :', err); }
 
   try{
-    const sorted = visibleCenters();
+    const sorted = visibleCenters().filter(c => totalPlafond(c) > 0);
     const compareLabels = sorted.map(c => c.name);
     const compareData = sorted.map(c => {
       const d = loadFsData(c.id);
@@ -4146,9 +4146,9 @@ document.getElementById('btnExportExcel').addEventListener('click', () => {
       const rows = [[title],["Nom","Nb FS","Performance moyenne","Données envoyées"]];
       Object.keys(groups).sort().forEach(key => {
         const list = groups[key];
-        let sumFrac=0, nSent=0;
-        list.forEach(c=>{ const d=loadFsData(c.id); const t=totalScore(c,effInputs(c,d)); const de=totalPlafond(c); sumFrac+=pct(t,de); if(d.sent) nSent++; });
-        rows.push([key, list.length, list.length? sumFrac/list.length : 0, `${nSent}/${list.length}`]);
+        let sumFrac=0, nSent=0, nCalc=0;
+        list.forEach(c=>{ const d=loadFsData(c.id); const t=totalScore(c,effInputs(c,d)); const de=totalPlafond(c); if(de>0){ sumFrac+=pct(t,de); nCalc++; } if(d.sent) nSent++; });
+        rows.push([key, list.length, nCalc? sumFrac/nCalc : 0, `${nSent}/${list.length}`]);
       });
       XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), title.slice(0,31));
     }
@@ -4271,7 +4271,7 @@ document.getElementById('btnExportChartExactitude').addEventListener('click', ()
   exportAoaToExcel(rows, "Exactitude", `Exactitude_${slugFilename(center.name)}.xlsx`);
 });
 document.getElementById('btnExportChartCompare').addEventListener('click', () => {
-  const sorted = visibleCenters();
+  const sorted = visibleCenters().filter(c => totalPlafond(c) > 0);
   if(!sorted.length){ alert("Aucune FS visible à exporter."); return; }
   const rows = [["FS","Performance globale (%)"]];
   sorted.forEach(c => {
@@ -4531,278 +4531,48 @@ async function generateZoneReport(){
   const list = (zoneGroups()[zone] || []).slice().sort((a,b)=>a.order-b.order);
   if(!list.length){ alert("Aucune FS trouvée pour cette zone."); return; }
   statusEl.textContent = "⏳ Génération en cours…";
-
   try{
-    const D = docx;
-    const children = [];
-
-    /* ---------- PAGE DE GARDE ---------- */
-    const logoBytes = dataUrlToUint8Array("data:image/png;base64," + REPORT_LOGO_B64);
-    children.push(new D.Paragraph({ children:[ new D.ImageRun({ data: logoBytes, transformation:{width:330, height:139}, type:"png" }) ], alignment:D.AlignmentType.CENTER, spacing:{after:300} }));
-    children.push(dxP("MINISTÈRE DE LA SANTÉ", {bold:true, align:D.AlignmentType.CENTER, size:24}));
-    children.push(dxP("――――――――――――――――――――――", {align:D.AlignmentType.CENTER, after:60}));
-    children.push(dxP(`DIRECTION DÉPARTEMENTALE DE LA SANTÉ : ${departement ? departement.toUpperCase() : 'XXX'}`, {bold:true, align:D.AlignmentType.CENTER, size:24}));
-    children.push(dxP("――――――――――――――――――――――", {align:D.AlignmentType.CENTER, after:60}));
-    children.push(dxP(`ZONE SANITAIRE : ${zone.toUpperCase()}`, {bold:true, align:D.AlignmentType.CENTER, size:24}));
-    children.push(dxP("――――――――――――――――――――――", {align:D.AlignmentType.CENTER, after:60}));
-    if(commune) children.push(dxP(`COMMUNE : ${commune.toUpperCase()}`, {bold:true, align:D.AlignmentType.CENTER, size:24, after:200}));
-    children.push(dxP("Rapport d'évaluation de la performance des formations sanitaires en surveillance épidémiologique", {bold:true, align:D.AlignmentType.CENTER, size:30, after:200}));
-    children.push(dxP(`Période évaluée : ${evalYear}`, {bold:true, underline:true, align:D.AlignmentType.CENTER, size:24}));
-    children.push(dxP(`Document généré automatiquement le ${new Date().toLocaleDateString('fr-FR')} à partir de l'Outil unifié de collecte.`, {italics:true, align:D.AlignmentType.CENTER, size:18, color:"777777"}));
-
-    /* ---------- ÉQUIPES (déduites des évaluateurs saisis par FS) ---------- */
-    children.push(new D.Paragraph({ children:[], pageBreakBefore:true }));
-    children.push(dxHeading("Équipe d'évaluation", D.HeadingLevel.HEADING_2));
-    const evalRows = [];
-    const analysisRows = [];
-    list.forEach(c => {
-      const fd = loadFsData(c.id);
-      ['eval1','eval2'].forEach(k => { const e = fd.evaluateurs[k]; if(e && (e.nom||'').trim()) evalRows.push([e.nom, e.qualif||'', c.name]); });
-      ['rapporteur','sup1','sup2','sup3'].forEach(k => { const e = fd.evaluateurs[k]; if(e && (e.nom||'').trim()) analysisRows.push([e.nom, e.qualif||'', c.name]); });
-    });
-    const teamCols = [700, 3200, 3200, 2400];
-    children.push(dxTable(["N°","Nom et prénom","Titre/qualification","Provenance"],
-      evalRows.length ? evalRows.map((r,i)=>[String(i+1), r[0], r[1], r[2]]) : [["","(à compléter)","",""]], teamCols));
-    children.push(dxHeading("Équipe d'analyse des données et de rédaction du rapport général", D.HeadingLevel.HEADING_2));
-    children.push(dxTable(["N°","Nom et prénom","Titre/qualification","Provenance"],
-      analysisRows.length ? analysisRows.map((r,i)=>[String(i+1), r[0], r[1], r[2]]) : [["","(à compléter)","",""]], teamCols));
-
-    /* ---------- INTRODUCTION / OBJECTIFS / MÉTHODES (texte type) ---------- */
-    children.push(new D.Paragraph({ children:[], pageBreakBefore:true }));
-    children.push(dxHeading("1. Introduction", D.HeadingLevel.HEADING_1));
-    children.push(dxP("Le Bénin, à l'instar des autres pays de la sous-région, n'est pas épargné par les épidémies et autres événements de santé publique. Afin de prévenir ces épidémies, le Règlement Sanitaire International (RSI 2005) a été adopté, avec un cadre de suivi-évaluation des principales capacités requises mis en place en 2010 par l'OMS."));
-    children.push(dxP(`Au Bénin, l'Agence Nationale des Soins de Santé Primaires (ANSSP), à travers la Direction de la surveillance épidémiologique et de la riposte, a entrepris plusieurs réformes de la surveillance (communautaire, hospitalière et privée, basée sur les événements, électronique via DHIS2, etc.). C'est dans ce cadre que la zone sanitaire de ${zone} a conduit, au titre de l'année ${evalYear}, l'évaluation de la performance de ses formations sanitaires en surveillance épidémiologique.`));
-    children.push(dxHeading("Objectifs de l'évaluation", D.HeadingLevel.HEADING_2));
-    children.push(dxP("Objectif général : renforcer le dispositif de suivi-évaluation de la mise en œuvre de la SIMR dans la zone sanitaire.", {bold:true}));
-    children.push(dxP("Objectifs spécifiques :"));
-    children.push(...dxBullets([
-      "Apprécier la mise en œuvre de la surveillance communautaire ;",
-      "Apprécier la mise en œuvre de la surveillance basée sur les indicateurs (routine) ;",
-      "Évaluer la participation des hôpitaux et des structures sanitaires privées dans la surveillance des maladies et événements prioritaires ;",
-      "Renforcer la gestion des données de la surveillance épidémiologique ;",
-      "Renforcer le dispositif de préparation et de riposte du système de santé à tous les niveaux.",
-    ]));
-    children.push(dxHeading("2. Méthodes", D.HeadingLevel.HEADING_1));
-    children.push(dxP(`L'évaluation a couvert ${list.length} formation(s) sanitaire(s) de la zone sanitaire de ${zone}. La collecte des données a été réalisée à l'aide de l'Outil unifié de collecte (indicateurs de performance, exactitude des données, priorisation), et le présent rapport a été généré automatiquement à partir des données saisies par les équipes d'évaluation.`));
-    children.push(dxP("[Section à compléter/adapter par l'équipe technique : phase préparatoire, échantillonnage, techniques et outils de collecte, supervision, traitement des données, organisation de la restitution des résultats.]", {italics:true, color:"777777"}));
-
-    /* ---------- RÉSULTATS — ANALYSE PAR FORMATION SANITAIRE ---------- */
-    children.push(new D.Paragraph({ children:[], pageBreakBefore:true }));
-    children.push(dxHeading("3. Résultats de l'évaluation", D.HeadingLevel.HEADING_1));
-    children.push(dxHeading("3.1 Analyse par formation sanitaire", D.HeadingLevel.HEADING_2));
-
-    const fsSummaries = []; // pour les graphiques de synthèse de zone
-    list.forEach(c => {
+    if(typeof JSZip === 'undefined' || typeof XLSX === 'undefined') throw new Error("Bibliothèques JSZip/XLSX non chargées (connexion internet requise la première fois).");
+    const num = v => { const x = parseFloat(v); return isNaN(x) ? 0 : x; };
+    const evalTeam = [], supervision = [], seenT = new Set(), seenS = new Set();
+    const plan = [];
+    const fsModel = list.map(c => {
       const fd = loadFsData(c.id);
       const effInp = effInputs(c, fd);
-      const domainScores = computeDomainScores(c, effInp);
-      const total = totalScore(c, effInp);
-      const denom = totalPlafond(c);
-      const globalPct = denom ? Math.round(pct(total,denom)*100) : 0;
-      const effSrc = effSources(c, fd);
-      const discFicheRapport = discordance(sourceTotal(effSrc[EXACT_DISCORD[0].a]), sourceTotal(effSrc[EXACT_DISCORD[0].b]));
-      const discCseDhis2 = discordance(sourceTotal(effSrc[EXACT_DISCORD[3].a]), sourceTotal(effSrc[EXACT_DISCORD[3].b]));
-      const discFicheRapportPct = discFicheRapport===null ? 0 : Math.round(discFicheRapport*100);
-      const discCseDhis2Pct = discCseDhis2===null ? 0 : Math.round(discCseDhis2*100);
-      fsSummaries.push({ name:c.name, globalPct, discFicheRapportPct, discCseDhis2Pct });
-
-      children.push(dxHeading(c.name, D.HeadingLevel.HEADING_3));
-      children.push(dxTable(["Indicateur","Valeur"], [
-        ["Score global de performance en %", globalPct + "%"],
-        ["Discordance données (fiche de notification FS et rapport FS) en %", discFicheRapport===null?"—":discFicheRapportPct+"%"],
-        ["Discordance données (rapport CSE et DHIS2) en %", discCseDhis2===null?"—":discCseDhis2Pct+"%"],
-      ], [6000, 2600]));
-
-      // Radar de performance par domaine
-      const applicableDomains = DOMAINS.filter(d => !domainScores[d.key].na);
-      if(applicableDomains.length){
-        const radarValues = applicableDomains.map(d => Math.round(pct(domainScores[d.key].score, domainScores[d.key].plafond)*100));
-        const radarBytes = chartConfigToPngBytes({
-          type:'radar',
-          data:{ labels: applicableDomains.map(d=>d.label), datasets:[{ label: c.name,
-            data: radarValues,
-            backgroundColor:'rgba(27,138,122,0.28)', borderColor:'#1b8a7a', borderWidth:2, pointBackgroundColor:'#1b8a7a', pointRadius:3 }] },
-          options:{ plugins:{legend:{display:false}}, scales:{ r:{min:0,max:100, ticks:{stepSize:20}, pointLabels:{font:{size:11}}} } }
-        }, 620, 460);
-        children.push(new D.Paragraph({ children:[ new D.ImageRun({ data: radarBytes, transformation:{width:460, height:342}, type:"png" }) ], alignment:D.AlignmentType.CENTER, spacing:{before:120, after:100} }));
-        children.push(dxChartDataTable(applicableDomains.map(d=>d.label), radarValues, "% de performance"));
-      }
-      children.push(dxP("Commentaire formation sanitaire " + c.name + " : [à compléter]", {italics:true, color:"777777"}));
-    });
-    /* ---------- ANALYSE DE L'ENSEMBLE DES FS DE LA ZONE ---------- */
-    children.push(new D.Paragraph({ children:[], pageBreakBefore:true }));
-    children.push(dxHeading("3.2 Analyse de l'ensemble des formations sanitaires de la zone", docx.HeadingLevel.HEADING_2));
-
-    function barChartBytes(labels, data, color, labelStr){
-      return chartConfigToPngBytes({
-        type:'bar',
-        data:{ labels, datasets:[{ label: labelStr, data, backgroundColor: color, borderRadius:3 }] },
-        options:{ indexAxis:'y', plugins:{legend:{display:false}}, scales:{ x:{min:0,max:100, ticks:{stepSize:20}} } }
-      }, 620, Math.max(220, 34*labels.length));
-    }
-    function bestWorst(arr, key, higherIsBetter){
-      const sorted = arr.slice().sort((a,b)=> higherIsBetter ? b[key]-a[key] : a[key]-b[key]);
-      return { best: sorted[0], worst: sorted[sorted.length-1] };
-    }
-    const avg = (arr,key) => arr.length ? Math.round(arr.reduce((s,x)=>s+x[key],0)/arr.length) : 0;
-
-    // Performance globale par FS
-    children.push(dxP("Performance globale des formations sanitaires de la zone", {bold:true}));
-    children.push(new docx.Paragraph({ children:[ new docx.ImageRun({ data: barChartBytes(fsSummaries.map(f=>f.name), fsSummaries.map(f=>f.globalPct), '#1f4e78', '% de performance'), transformation:{width:600, height: Math.max(220, 32*fsSummaries.length)}, type:"png" }) ], alignment:docx.AlignmentType.CENTER, spacing:{after:100} }));
-    children.push(dxChartDataTable(fsSummaries.map(f=>f.name), fsSummaries.map(f=>f.globalPct), "% de performance"));
-    {
-      const bw = bestWorst(fsSummaries, 'globalPct', true);
-      children.push(dxP(`La performance moyenne de la zone est de ${avg(fsSummaries,'globalPct')}%. La formation sanitaire la plus performante est ${bw.best.name} (${bw.best.globalPct}%), et la moins performante est ${bw.worst.name} (${bw.worst.globalPct}%). [Commentaire à compléter/adapter.]`, {italics:true}));
-    }
-
-    // Discordance CSE / DHIS2
-    children.push(dxP("Niveau de discordance entre les données des rapports CSE et le DHIS2", {bold:true}));
-    children.push(new docx.Paragraph({ children:[ new docx.ImageRun({ data: barChartBytes(fsSummaries.map(f=>f.name), fsSummaries.map(f=>f.discCseDhis2Pct), '#c0392b', 'Discordance (%)'), transformation:{width:600, height: Math.max(220, 32*fsSummaries.length)}, type:"png" }) ], alignment:docx.AlignmentType.CENTER, spacing:{after:100} }));
-    children.push(dxChartDataTable(fsSummaries.map(f=>f.name), fsSummaries.map(f=>f.discCseDhis2Pct), "Discordance (%)"));
-    {
-      const bw = bestWorst(fsSummaries, 'discCseDhis2Pct', false);
-      children.push(dxP(`Le niveau moyen de discordance CSE/DHIS2 de la zone est de ${avg(fsSummaries,'discCseDhis2Pct')}%. La meilleure concordance (discordance la plus faible) est observée à ${bw.best.name} (${bw.best.discCseDhis2Pct}%), et la discordance la plus élevée à ${bw.worst.name} (${bw.worst.discCseDhis2Pct}%). [Commentaire à compléter/adapter.]`, {italics:true}));
-    }
-
-    // Discordance fiche / rapport
-    children.push(dxP("Niveau de discordance entre les fiches et les rapports des formations sanitaires", {bold:true}));
-    children.push(new docx.Paragraph({ children:[ new docx.ImageRun({ data: barChartBytes(fsSummaries.map(f=>f.name), fsSummaries.map(f=>f.discFicheRapportPct), '#c0392b', 'Discordance (%)'), transformation:{width:600, height: Math.max(220, 32*fsSummaries.length)}, type:"png" }) ], alignment:docx.AlignmentType.CENTER, spacing:{after:100} }));
-    children.push(dxChartDataTable(fsSummaries.map(f=>f.name), fsSummaries.map(f=>f.discFicheRapportPct), "Discordance (%)"));
-    {
-      const bw = bestWorst(fsSummaries, 'discFicheRapportPct', false);
-      children.push(dxP(`Le niveau moyen de discordance fiche/rapport de la zone est de ${avg(fsSummaries,'discFicheRapportPct')}%. La meilleure concordance est observée à ${bw.best.name} (${bw.best.discFicheRapportPct}%), et la discordance la plus élevée à ${bw.worst.name} (${bw.worst.discFicheRapportPct}%). [Commentaire à compléter/adapter.]`, {italics:true}));
-    }
-
-    /* ---------- SYNTHÈSE ET PRIORISATION DE LA ZONE ---------- */
-    children.push(new docx.Paragraph({ children:[], pageBreakBefore:true }));
-    children.push(dxHeading("3.3 Synthèse et priorisation de la zone", docx.HeadingLevel.HEADING_2));
-    children.push(dxP("Score agrégé (somme) de toutes les FS de la zone. Priorisation en %."));
-    const prioColWidths = [700, 6600, 1800];
-    const prioTrs = [ new docx.TableRow({ children:["N°","Intitulé de l'indicateur","Priorisation"].map((h,i)=>dxCell(h,{header:true, width:prioColWidths[i]})), tableHeader:true }) ];
-    DOMAINS.forEach(d => {
-      const inds = INDICATORS.filter(i => i.domain === d.key);
-      const applicableInds = inds.filter(ind => list.some(c => indicatorApplicable(c, ind)));
-      if(!applicableInds.length) return;
-      prioTrs.push(dxDomainRow(d.label, 3, prioColWidths));
-      applicableInds.forEach(ind => {
-        let sc = 0, plafond = 0;
-        list.forEach(c => {
-          if(!indicatorApplicable(c, ind)) return;
-          const fd = loadFsData(c.id);
-          const inp = effInputs(c, fd)[ind.id];
-          sc += scoreFor(ind, inp);
-          plafond += ind.plafond;
-        });
-        const frac = plafond ? sc/plafond : 0;
-        prioTrs.push(new docx.TableRow({ children:[
-          dxCell(String(ind.id), {width:prioColWidths[0]}),
-          dxCell(ind.label, {width:prioColWidths[1]}),
-          dxCell(fmtPct(frac), {width:prioColWidths[2]}),
-        ] }));
+      const ds = computeDomainScores(c, effInp);
+      const ind = {};
+      INDICATORS.forEach(i => {
+        if(!indicatorApplicable(c, i)){ ind[i.id] = { na:true }; return; }
+        const inp = effInp[i.id] || {};
+        ind[i.id] = { na:false, score:scoreFor(i, inp), plafond:i.plafond,
+          data: i.rule === "oui2" ? (inp.b || "Non") : `${num(inp.n)}/${num(inp.d)}` };
       });
+      ['eval1','eval2'].forEach(k => { const e = fd.evaluateurs[k]; const nm = e && (e.nom||'').trim();
+        if(nm && !seenT.has(nm.toLowerCase())){ seenT.add(nm.toLowerCase()); evalTeam.push({ nom:nm, qualif:(e.qualif||'').trim() }); } });
+      ['rapporteur','sup1','sup2','sup3'].forEach(k => { const e = fd.evaluateurs[k]; const nm = e && (e.nom||'').trim();
+        if(nm && !seenS.has(nm.toLowerCase())){ seenS.add(nm.toLowerCase()); supervision.push({ nom:nm, qualif:((e.qualif||'').trim() + (k==='rapporteur' ? ' (rapporteur)' : '')).trim() }); } });
+      (fd.plan || []).forEach(r => plan.push({ fs:c.name, domain:r.domain, indicateur:r.indicateur, ameliorer:r.ameliorer, cause:r.cause, activite:r.activite, cout:r.cout }));
+      return { name:c.name, type:c.type, order:c.order, domains:ds, ind, total:totalScore(c, effInp), denom:totalPlafond(c) };
     });
-    children.push(new docx.Table({ rows: prioTrs, width:{size:prioColWidths.reduce((a,b)=>a+b,0),type:docx.WidthType.DXA}, columnWidths: prioColWidths }));
-    children.push(dxP("Commentaire du niveau des indicateurs : [à compléter]", {italics:true, color:"777777"}));
-
-    /* ---------- GRANDS CONSTATS ET RECOMMANDATIONS (par domaine, puis par centre) ---------- */
-    children.push(new docx.Paragraph({ children:[], pageBreakBefore:true }));
-    children.push(dxHeading("4. Grands constats de l'évaluation et recommandations", docx.HeadingLevel.HEADING_1));
-    const constatsColWidths = [3200, 3200, 3600];
-    DOMAINS.forEach(d => {
-      const applicable = list.filter(c => !domainFullyNA(c, d.key));
-      if(!applicable.length) return;
-      // Ne garder que les centres ayant effectivement renseigné quelque chose pour ce domaine
-      const withData = applicable.filter(c => {
-        const s = loadFsData(c.id).synth[d.key];
-        return s.forts.some(v=>(v||'').trim()) || s.ameliorer.some(v=>(v||'').trim()) || s.reco.some(v=>(v||'').trim());
-      });
-      if(!withData.length) return;
-      children.push(dxHeading(d.label, docx.HeadingLevel.HEADING_2));
-      withData.forEach(c => {
-        const s = loadFsData(c.id).synth[d.key];
-        const forts = s.forts.filter(v=>(v||'').trim());
-        const ameliorer = s.ameliorer.filter(v=>(v||'').trim());
-        const reco = s.reco.filter(v=>(v||'').trim());
-        children.push(dxP(c.name, {bold:true, after:60}));
-        const mkListCell = (arr) => ({__cellOpts:{ paras: arr.length ? arr.map(t => new docx.Paragraph({ children:[new docx.TextRun({text:t, size:18})], bullet:{level:0}, spacing:{after:40} })) : [new docx.Paragraph({children:[new docx.TextRun({text:"—", size:18})]})] }});
-        children.push(dxTable(["Points forts","Points à améliorer","Recommandations"],
-          [[ mkListCell(forts), mkListCell(ameliorer), mkListCell(reco) ]], constatsColWidths));
-      });
-    });
-
-    /* ---------- PLAN DE RÉSOLUTION DES PROBLÈMES DE LA ZONE (par domaine, puis par centre) ---------- */
-    children.push(new docx.Paragraph({ children:[], pageBreakBefore:true }));
-    children.push(dxHeading("5. Plan de résolution des problèmes de la zone", docx.HeadingLevel.HEADING_1));
-    const planColWidths = [2400, 2000, 1800, 2200, 1200];
-    let totalCost = 0;
-    DOMAINS.forEach(d => {
-      // Lignes de plan de tous les centres, rattachées à ce domaine (row.domain contient la clé du domaine, ex. "D1")
-      const byCenter = {};
-      list.forEach(c => {
-        const fd = loadFsData(c.id);
-        const rows = (fd.plan||[]).filter(r => r.domain === d.key && ((r.indicateur||'').toString().trim() || (r.activite||'').trim()));
-        if(rows.length) byCenter[c.id] = { center:c, rows };
-      });
-      const centerIds = Object.keys(byCenter);
-      if(!centerIds.length) return;
-      children.push(dxHeading(d.label, docx.HeadingLevel.HEADING_2));
-      centerIds.forEach(cid => {
-        const { center, rows } = byCenter[cid];
-        children.push(dxP(center.name, {bold:true, after:60}));
-        const tableRows = rows.map(r => {
-          const ind = INDICATORS.find(i => i.id == r.indicateur);
-          const costNum = parseFloat(String(r.cout||'').replace(/[^\d.,-]/g,'').replace(',','.'));
-          if(!isNaN(costNum)) totalCost += costNum;
-          return [ ind ? `Id ${ind.id} — ${ind.label}` : (r.indicateur||''), r.ameliorer||'', r.cause||'', r.activite||'', r.cout||'' ];
-        });
-        children.push(dxTable(["Indicateur","Point à améliorer","Cause/goulot","Activité proposée","Coût estimatif"], tableRows, planColWidths));
-      });
-    });
-    children.push(dxP(`Total général : ${totalCost ? totalCost.toLocaleString('fr-FR') : 'XX'}`, {bold:true, align:docx.AlignmentType.RIGHT}));
-
-    /* ---------- CONCLUSION ---------- */
-    children.push(new docx.Paragraph({ children:[], pageBreakBefore:true }));
-    children.push(dxHeading("6. Conclusion", docx.HeadingLevel.HEADING_1));
-    children.push(dxP("[À compléter par l'équipe technique/DDS.]", {italics:true, color:"777777"}));
-
-    /* ---------- PHOTOS DE TERRAIN ---------- */
-    children.push(dxHeading("7. Quelques photos de terrain et d'atelier de restitution", docx.HeadingLevel.HEADING_1));
-    let anyPhoto = false;
-    list.forEach(c => {
-      const fd = loadFsData(c.id);
-      const withData = PHOTO_SLOTS.filter(s => fd.photos[s.key] && fd.photos[s.key].data);
-      if(!withData.length) return;
-      anyPhoto = true;
-      children.push(dxP(c.name, {bold:true}));
-      withData.forEach(s => {
-        const p = fd.photos[s.key];
-        try{
-          const bytes = dataUrlToUint8Array(p.data);
-          children.push(new docx.Paragraph({ children:[ new docx.ImageRun({ data:bytes, transformation:{width:280, height:200}, type:"png" }) ], spacing:{after:40} }));
-          children.push(dxP(p.title || s.fixedTitle || '', {italics:true, size:16, after:160}));
-        }catch(err){ /* image illisible, ignorée */ }
-      });
-    });
-    if(!anyPhoto) children.push(dxP("Aucune photo disponible pour cette zone.", {italics:true, color:"777777"}));
-
-    /* ---------- ASSEMBLAGE ET TÉLÉCHARGEMENT ---------- */
-    const doc = new docx.Document({
-      sections:[{ properties:{ page:{ size:{width:11906, height:16838}, margin:{top:1000, bottom:1000, left:1100, right:1100} } }, children }]
-    });
-    const blob = await docx.Packer.toBlob(doc);
+    let dateLabel = new Date().toLocaleDateString('fr-FR', { month:'long', year:'numeric' });
+    dateLabel = dateLabel.charAt(0).toUpperCase() + dateLabel.slice(1);
+    const model = {
+      zone, commune, departement, year:String(evalYear), dateLabel,
+      domains: DOMAINS.map(d => ({ key:d.key, label:d.label })),
+      indicators: INDICATORS.map(i => ({ id:i.id, label:i.label, domain:i.domain, rule:i.rule, plafond:i.plafond })),
+      fs: fsModel, evalTeam, supervision, plan, staticSpec: ZR_STATIC_SPEC
+    };
+    const blob = await ZoneReport.generate(model, { JSZip, XLSX, skeletonB64: ZR_SKELETON_B64, outType:'blob' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `Rapport_Evaluation_${zone.replace(/[^\p{L}\p{N}]+/gu,'_')}_${evalYear}.docx`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
+    a.download = `Rapport_Evaluation_FS_${zone.replace(/[^\p{L}\p{N}]+/gu,'_')}_${evalYear}.docx`;
+    document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 5000);
-    statusEl.textContent = "✓ Rapport généré et téléchargé.";
+    statusEl.textContent = "✔ Rapport généré (graphiques Word modifiables).";
   }catch(err){
     console.error(err);
-    statusEl.textContent = "";
-    alert("Erreur lors de la génération du rapport : " + err.message);
+    statusEl.textContent = "⚠ Échec de la génération : " + (err && err.message ? err.message : err);
   }
 }
 document.getElementById('btnGenerateZoneReport').addEventListener('click', generateZoneReport);
@@ -4885,6 +4655,7 @@ function generateZoneReportExcel(){
     const planRows = [["Domaine","FS","Indicateur","Point à améliorer","Cause/goulot","Activité proposée","Coût estimatif"]];
     DOMAINS.forEach(d => {
       list.forEach(c => {
+        if(domainFullyNA(c, d.key)) return;
         const fd = loadFsData(c.id);
         (fd.plan||[]).filter(r => r.domain === d.key && ((r.indicateur||'').toString().trim() || (r.activite||'').trim())).forEach(r => {
           const ind = INDICATORS.find(i => i.id == r.indicateur);
@@ -4903,6 +4674,647 @@ function generateZoneReportExcel(){
   }
 }
 document.getElementById('btnGenerateZoneReportExcel').addEventListener('click', generateZoneReportExcel);
+
+</script>
+
+<script>
+/* ===== Rapport de zone (canevas Word, graphiques natifs) : squelette du modèle + texte type + générateur ===== */
+const ZR_SKELETON_B64 = "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";
+const ZR_STATIC_SPEC = [{"k": "h1", "r": [["1. Introduction", false]]}, {"k": "p", "r": [["Le Bénin, à l'instar des autres pays de la sous-région, n'est pas épargné des épidémies et autres événements de santé publique. Ces épidémies, pour la plupart, se traduisent non seulement par une morbidité et une mortalité élevée, mais aussi par des impacts dans plusieurs secteurs, comme l'a montré la pandémie de la COVID-19.", false]]}, {"k": "p", "r": [["Afin de prévenir ces épidémies et autres événements de santé publique, le Règlement Sanitaire International (RSI 2005) a été adopté lors de la 58ème Assemblée Mondiale de la Santé en mai 2005. L'objectif est de « prévenir la propagation internationale des maladies, de protéger, de maîtriser et de réagir en temps réel par une action de santé publique proportionnée et limitée aux risques qu'elle présente pour la santé publique, en évitant de créer des entraves inutiles au trafic et au commerce internationaux ». Un cadre de suivi-évaluation des principales capacités requises du RSI a été mis en place en 2010 par l'OMS.", false]]}, {"k": "p", "r": [["Au Bénin, depuis quelques années, l'Agence Nationale des Soins de Santé Primaires (ANSSP), à travers la Direction de la surveillance épidémiologique et de la riposte, a entrepris plusieurs réformes centrées sur certains axes d'intervention : le repositionnement de la surveillance dans les hôpitaux et le secteur privé, la surveillance à base communautaire (SBC), la surveillance basée sur les événements (SBE), la surveillance de la mortalité (tous les décès notifiés depuis 2024), la surveillance sentinelle syndromique, la surveillance électronique à travers le DHIS2, et le renforcement du dispositif de suivi-évaluation de la mise en œuvre de la SIMR. Dans l'opérationnalisation de ce dernier axe, après l'élaboration d'un cadre de performance de la surveillance, l'agence a démarré le processus d'évaluation de la performance de la surveillance avec les zones sanitaires et départements. Il est également prévu l'évaluation semestrielle des formations sanitaires. C'est dans cette optique que la zone sanitaire {{ZONE}} a initié l'évaluation des formations sanitaires au titre de l'année {{YEAR}}.", false]]}, {"k": "h2", "r": [["Objectifs de l'évaluation", false]]}, {"k": "h3", "r": [["Objectif général", false]]}, {"k": "p", "r": [["Renforcer le dispositif de suivi-évaluation de la mise en œuvre de la SIMR dans la zone sanitaire {{ZONE}} en {{YEAR}}.", false]]}, {"k": "h3", "r": [["Objectifs spécifiques", false]]}, {"k": "li", "r": [["Apprécier la mise en œuvre de la surveillance communautaire ;", false]]}, {"k": "li", "r": [["Apprécier la mise en œuvre de la surveillance basée sur les indicateurs (routine) ;", false]]}, {"k": "li", "r": [["Évaluer la participation des hôpitaux et des structures sanitaires privées dans la mise en œuvre de la surveillance des maladies et événements prioritaires ;", false]]}, {"k": "li", "r": [["Renforcer la gestion des données de la surveillance épidémiologique ;", false]]}, {"k": "li", "r": [["Renforcer le dispositif de préparation et de riposte du système de santé à tous les niveaux.", false]]}, {"k": "h1", "r": [["2. Méthodes", false]]}, {"k": "h2", "r": [["Phase préparatoire", false]]}, {"k": "p", "r": [["Une équipe technique de coordination de l'évaluation a été mise en place. Elle a exécuté les tâches suivantes :", false]]}, {"k": "li", "r": [["Élaboration des termes de référence pour la recherche de financement ;", false]]}, {"k": "li", "r": [["Identification des évaluateurs : cadres expérimentés en surveillance, en santé communautaire et ayant l'expérience du calcul des indicateurs et de la gestion des données ;", false]]}, {"k": "li", "r": [["Multiplication des outils de collecte ;", false]]}, {"k": "li", "r": [["Constitution des équipes d'évaluation par commune ;", false]]}, {"k": "li", "r": [["Organisation d'une séance d'harmonisation avec les évaluateurs, conduite par l'équipe technique avec l'appui de l'équipe de la DDS. Les évaluateurs y ont été briefés sur la méthodologie et le calcul des indicateurs ; une feuille de route de l'évaluation ainsi que les messages d'information des acteurs ont été élaborés.", false]]}, {"k": "h2", "r": [["Phase de mise en œuvre", false]]}, {"k": "h3", "r": [["Échantillonnage des formations sanitaires", false]]}, {"k": "p", "r": [["Il s'agit d'un recensement exhaustif combiné à un échantillonnage par choix raisonné :", false]]}, {"k": "li", "r": [["Toutes les formations sanitaires publiques de la zone sanitaire ont été incluses dans l'évaluation ;", false]]}, {"k": "li", "r": [["Les formations sanitaires privées et confessionnelles présentes sur la cartographie de la zone ont été incluses dans l'évaluation.", false]]}, {"k": "p", "r": [["{{TOTALFS}}", false]]}, {"k": "empty"}, {"k": "empty"}, {"k": "h3", "r": [["Technique et outils de collecte", false]]}, {"k": "p", "r": [["Outils de collecte :", true]]}, {"k": "li", "r": [["Outil de collecte et de calcul des indicateurs ;", false]]}, {"k": "li", "r": [["Outil de vérification de l'exactitude des données de surveillance.", false]]}, {"k": "p", "r": [["Technique de collecte :", true]]}, {"k": "p", "r": [["Revue documentaire :", true], [" les fiches de notification, les rapports hebdomadaires, les rapports d'activité, les listes de présence et les autres documents concernés par l'évaluation ont été dépouillés.", false]]}, {"k": "p", "r": [["Observation :", true], [" elle a permis de voir et d'apprécier l'existence de certains matériels et équipements de la surveillance, tels que le tableau d'affichage des courbes, le matériel de prélèvement et de transport des échantillons, la disponibilité d'une armoire de rangement, etc.", false]]}, {"k": "p", "r": [["Calcul des différents indicateurs :", true], [" un outil dédié a été utilisé pour la collecte et le calcul des indicateurs.", false]]}, {"k": "p", "r": [["Synthèse de l'évaluation :", true], [" une restitution locale a été faite dans les formations sanitaires évaluées, avec les grands constats, suivie de l'élaboration d'un plan de résolution des problèmes identifiés au cours de l'évaluation.", false]]}, {"k": "h3", "r": [["Supervision de l'évaluation", false]]}, {"k": "p", "r": [["Elle a été assurée par une équipe de la DDS composée du DDS, du CSSPR, du CDSERRS et du point focal Santé Communautaire.", false]]}, {"k": "h2", "r": [["Traitement des données", false]]}, {"k": "h3", "r": [["Phase préparatoire", false]]}, {"k": "p", "r": [["Une équipe composée de gestionnaires de données (RCSE, responsable des statistiques et personnes ressources) a assuré le traitement et l'analyse des données. L'équipe a procédé à :", false]]}, {"k": "li", "r": [["La vérification de la complétude des données collectées ;", false]]}, {"k": "li", "r": [["La vérification de la qualité des données (données aberrantes, manquantes, etc.) ;", false]]}, {"k": "li", "r": [["L'agrégation et la pondération des indicateurs.", false]]}, {"k": "h3", "r": [["Traitement et analyse des données", false]]}, {"k": "p", "r": [["Les données ont été agrégées et analysées par formation sanitaire, par type de structure et pour l'ensemble de la zone sanitaire, avec calcul :", false]]}, {"k": "li", "r": [["Des scores de performance par indicateur et par domaine ;", false]]}, {"k": "li", "r": [["Des synthèses par formation sanitaire et par type de structure ;", false]]}, {"k": "li", "r": [["De la priorisation des indicateurs les plus faibles à l'échelle de la zone.", false]]}, {"k": "p", "r": [["Une équipe de la DDS a supervisé et appuyé cette étape de traitement et d'analyse des données.", false]]}, {"k": "h3", "r": [["Élaboration du rapport d'évaluation", false]]}, {"k": "p", "r": [["Un rapport d'évaluation a été élaboré avec les grands constats par formation sanitaire et par domaine évalué. Le présent rapport général a été élaboré par l'équipe technique de traitement et d'analyse des données, en vue de sa validation par les évaluateurs et l'équipe de la DDS.", false]]}, {"k": "h2", "r": [["Organisation de la restitution des résultats", false]]}, {"k": "p", "r": [["Un atelier de restitution des résultats devra être organisé avec tous les acteurs concernés : chefs de poste et responsables de maternité, médecins-chefs, RCSE, points focaux de la surveillance des hôpitaux, directeurs d'hôpitaux, membres des Équipes d'Intervention Rapide (EIR) et l'équipe de la DDS. Les plans de résolution des problèmes seront finalisés avec chaque formation sanitaire à cette occasion.", false]]}, {"k": "empty"}];
+/* =========================================================================
+   RAPPORT DE ZONE — canevas Word (graphiques natifs modifiables)
+   Génère le .docx à partir d'un « squelette » issu du rapport modèle
+   (styles, numérotation, en-tête, pied de page) et injecte :
+     - le corps du rapport (même plan que le modèle),
+     - des graphiques Word natifs (radar / barres) avec classeur Excel
+       intégré, donc modifiables dans Word (clic droit > Modifier les données).
+   ========================================================================= */
+const ZoneReport = (function(){
+  const FONT = '<w:rFonts w:ascii="Arial Narrow" w:hAnsi="Arial Narrow"/>';
+  const C_HEAD = '1F3864', C_DOM = 'EAF1F8', C_RED = 'C1272D', C_AMB = 'E67E22', C_GRN = '2E7D32';
+  const BAR_RED = 'EE0000';
+  const esc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  const colorOf = p => p < 50 ? C_RED : (p < 75 ? C_AMB : C_GRN);
+  const barColorOf = p => p < 50 ? BAR_RED : (p < 75 ? C_AMB : C_GRN);
+  const r0 = x => Math.round(x);
+  const r1 = x => Math.round(x * 10) / 10;
+  const pc = x => r0(x) + '%';
+
+  /* ---------- Libellés courts des indicateurs (phrases de synthèse) ---------- */
+  const SHORT = {
+    1:"l'identification des relais", 2:"la formation des relais", 3:"la formation des ASCQ",
+    4:"les villages mettant en œuvre la surveillance communautaire",
+    5:"la complétude des rapports de surveillance communautaire",
+    6:"le nombre moyen d'alertes détectées par les relais", 7:"la vérification des alertes dans les 24h à 48h",
+    8:"la proportion d'alertes qui sont des événements avérés",
+    9:"la disponibilité des définitions de cas communautaires chez les relais",
+    10:"la disponibilité des définitions de cas standards", 11:"la disponibilité des fiches de notification conformes",
+    12:"les recherches actives dans les sites prioritaires", 13:"la notification d'au moins un cas au cours des six derniers mois",
+    14:"la notification des cas avec les formulaires", 15:"le briefing du personnel",
+    16:"les rapports hebdomadaires des formations privées", 17:"les fiches et supports de notification des formations privées",
+    18:"la notification par les formations privées", 19:"la complétude des rapports hebdomadaires",
+    20:"la promptitude des rapports hebdomadaires", 21:"le remplissage des fiches de notification",
+    22:"le tableau d'affichage", 23:"les graphiques des maladies prioritaires mis à jour",
+    24:"l'archivage de l'année en cours", 25:"l'archivage des cinq dernières années",
+    26:"l'armoire de rangement", 27:"l'équipement des formations publiques pour le DHIS2",
+    28:"l'équipement des formations privées pour le DHIS2", 29:"l'équipement des relais pour la saisie des données",
+    30:"le matériel de prélèvement", 31:"le prélèvement sur les cas suspects",
+    32:"la déclaration des flambées dans les 24 heures"
+  };
+  const RECO = {
+    1:"Identifier des relais communautaires dans tous les villages de l'aire de santé",
+    2:"Former les relais communautaires restants sur la surveillance communautaire",
+    3:"Former les ASCQ sur la surveillance communautaire",
+    4:"Mettre en œuvre la surveillance communautaire dans tous les villages",
+    5:"Assurer la production et la transmission complète des rapports hebdomadaires de surveillance communautaire",
+    6:"Renforcer la supervision et l'accompagnement des relais pour la détection des alertes",
+    7:"Vérifier et investiguer toutes les alertes et rumeurs dans les 24h à 48h",
+    8:"Briefer les relais sur l'utilisation des définitions de cas communautaires afin de réduire les fausses alertes",
+    9:"Doter tous les relais de définitions de cas communautaires ou de modules de formation",
+    10:"Rendre disponibles les définitions de cas standards des maladies à potentiel épidémique",
+    11:"Mettre à disposition des fiches de notification conformes (nouvelles versions)",
+    12:"Planifier et réaliser régulièrement les recherches actives dans les sites prioritaires",
+    13:"Veiller à la notification des cas de maladies sous surveillance",
+    14:"Notifier systématiquement les cas à l'aide des formulaires de notification",
+    15:"Organiser régulièrement des séances de briefing du personnel sur la surveillance, avec rapport et liste de présence",
+    16:"Obtenir des formations privées l'élaboration de tous leurs rapports hebdomadaires",
+    17:"Doter les formations privées de fiches de notification conformes et de supports de rapport hebdomadaire",
+    18:"Encourager les formations privées à notifier les cas de maladies sous surveillance",
+    19:"Assurer la production complète des rapports hebdomadaires de toutes les formations sanitaires",
+    20:"Transmettre les rapports hebdomadaires dans les délais",
+    21:"Remplir complètement et correctement les fiches de notification",
+    22:"Mettre en place et mettre à jour le tableau d'affichage des données de surveillance",
+    23:"Tracer et mettre à jour les graphiques des maladies prioritaires",
+    24:"Archiver correctement les fiches de notification et les rapports de l'année en cours",
+    25:"Archiver correctement les fiches de notification et les rapports des cinq dernières années",
+    26:"Doter les formations sanitaires d'une armoire de rangement des documents de surveillance",
+    27:"Doter les formations publiques de tablette ou smartphone avec connexion pour la saisie dans le DHIS2",
+    28:"Doter les formations privées de tablette ou smartphone avec connexion pour la saisie dans le DHIS2",
+    29:"Doter les relais communautaires de tablette ou smartphone avec connexion pour la saisie des données",
+    30:"Mettre à disposition le matériel de prélèvement et de transport des échantillons (achat sur fonds communautaires, inscription au PTA)",
+    31:"Réaliser le prélèvement sur les cas suspects pour confirmation",
+    32:"Déclarer les suspicions de flambée dans les 24h suivant le franchissement du seuil d'alerte"
+  };
+  const SECTOR = { 'Publique':'secteur public', 'Privée':'secteur privé', 'Hôpital':'hôpital' };
+  const GROUPS = [
+    { key:'Publique', label:'Formations publiques (centres de santé)', short:'Formations publiques', phrase:'les formations publiques', plural:'publiques' },
+    { key:'Privée',   label:'Formations privées', short:'Formations privées', phrase:'les formations privées', plural:'privées' },
+    { key:'Hôpital',  label:'Hôpitaux', short:'Hôpitaux', phrase:'les hôpitaux', plural:'hôpitaux' }
+  ];
+
+  /* ---------- Primitives WordprocessingML ---------- */
+  function rpr(o){
+    o = o || {}; const sz = o.sz || 26;
+    return '<w:rPr>' + FONT + (o.b?'<w:b/><w:bCs/>':'') + (o.i?'<w:i/><w:iCs/>':'') +
+      (o.color?`<w:color w:val="${o.color}"/>`:'') + `<w:sz w:val="${sz}"/><w:szCs w:val="${sz}"/>` +
+      (o.u?'<w:u w:val="single"/>':'') + '</w:rPr>';
+  }
+  const run = (t, o) => `<w:r>${rpr(o)}<w:t xml:space="preserve">${esc(t)}</w:t></w:r>`;
+  function para(runs, o){
+    o = o || {}; const sz = o.sz || 26;
+    const pPr = '<w:pPr>' + (o.style?`<w:pStyle w:val="${o.style}"/>`:'') + (o.keepNext?'<w:keepNext/>':'') +
+      (o.pageBreakBefore?'<w:pageBreakBefore/>':'') +
+      (o.numId?`<w:numPr><w:ilvl w:val="0"/><w:numId w:val="${o.numId}"/></w:numPr>`:'') +
+      `<w:spacing${o.before!=null?` w:before="${o.before}"`:''} w:after="${o.after!=null?o.after:120}" w:line="${o.line||360}" w:lineRule="auto"/>` +
+      `<w:jc w:val="${o.jc||'both'}"/>` + rpr({sz}) + '</w:pPr>';
+    return '<w:p>' + pPr + (Array.isArray(runs) ? runs.join('') : runs) + '</w:p>';
+  }
+  const P = (t, o) => para(run(t, o), o);
+  const H1 = t => para(run(t), { style:'Titre1', before:0 });
+  const H2 = t => para(run(t), { style:'Titre2', before:0, keepNext:true });
+  const H3 = t => para(run(t), { style:'Titre3', before:0, keepNext:true });
+  const LI = (runs) => para(runs, { style:'Paragraphedeliste', numId:1 });
+  const PAGEBREAK = '<w:p><w:r><w:br w:type="page"/></w:r></w:p>';
+  const SPACER = '<w:p><w:pPr><w:spacing w:after="120"/><w:rPr>' + FONT + '<w:sz w:val="22"/></w:rPr></w:pPr></w:p>';
+
+  // Légende de tableau / figure
+  const tableCaption = (n, t) => para(run(`Tableau ${n}. ${t}`, { b:true, i:true }), { keepNext:true });
+  const figCaption = (n, t) => para([ run(`Figure ${n}.`, { b:true }), run(' ' + t, { i:true }) ], {});
+
+  /* ---------- Tableaux ---------- */
+  const BORD = ['top','left','bottom','right','insideH','insideV'].map(s => `<w:${s} w:val="single" w:sz="4" w:space="0" w:color="auto"/>`).join('');
+  function cell(c, w, d){
+    // c : {t, paras:[{t,b,color,sz}], b, color, fill, jc, span}
+    const fill = c.fill ? `<w:shd w:val="clear" w:color="auto" w:fill="${c.fill}"/>` : '';
+    const span = c.span > 1 ? `<w:gridSpan w:val="${c.span}"/>` : '';
+    const mar = `<w:tcMar><w:top w:w="${d.mT}" w:type="dxa"/><w:left w:w="80" w:type="dxa"/><w:bottom w:w="${d.mT}" w:type="dxa"/><w:right w:w="80" w:type="dxa"/></w:tcMar>`;
+    const sz = c.sz || d.sz;
+    const paras = c.paras && c.paras.length ? c.paras : [{ t: c.t == null ? '' : c.t }];
+    const body = paras.map(p => {
+      const o = { b: p.b != null ? p.b : c.b, color: p.color || c.color, sz: p.sz || sz };
+      const pp = `<w:p><w:pPr><w:spacing w:before="${d.before}" w:after="${d.after}" w:line="240" w:lineRule="auto"/><w:jc w:val="${c.jc || 'left'}"/>${rpr({sz:o.sz})}</w:pPr>` +
+        (p.t === '' ? '' : run(p.t, o)) + '</w:p>';
+      return pp;
+    }).join('');
+    return `<w:tc><w:tcPr><w:tcW w:w="${w}" w:type="dxa"/>${span}${fill}${mar}<w:vAlign w:val="center"/></w:tcPr>${body}</w:tc>`;
+  }
+  // rows : [{header:true, cells:[...]}, {cells:[...]}]
+  function table(widths, rows, d){
+    d = Object.assign({ mT:40, before:20, after:20, sz:22 }, d || {});
+    const total = widths.reduce((a,b)=>a+b, 0);
+    let x = `<w:tbl><w:tblPr><w:tblW w:w="${total}" w:type="dxa"/><w:tblBorders>${BORD}</w:tblBorders><w:tblLayout w:type="fixed"/>` +
+      `<w:tblCellMar><w:left w:w="10" w:type="dxa"/><w:right w:w="10" w:type="dxa"/></w:tblCellMar>` +
+      `<w:tblLook w:val="04A0" w:firstRow="1" w:lastRow="0" w:firstColumn="1" w:lastColumn="0" w:noHBand="0" w:noVBand="1"/></w:tblPr>` +
+      `<w:tblGrid>${widths.map(w=>`<w:gridCol w:w="${w}"/>`).join('')}</w:tblGrid>`;
+    rows.forEach(r => {
+      x += '<w:tr><w:trPr>' + (r.keepRow === false ? '' : '<w:cantSplit/>') + (r.header ? '<w:tblHeader/>' : '') + '</w:trPr>';
+      let ci = 0;
+      r.cells.forEach(c => {
+        const span = c.span || 1;
+        let w = 0; for(let k = 0; k < span; k++) w += widths[ci + k];
+        ci += span;
+        x += cell(c, w, d);
+      });
+      x += '</w:tr>';
+    });
+    return x + '</w:tbl>';
+  }
+  const hdrCells = (labels, jcs) => labels.map((t, i) => ({ t, b:true, color:'FFFFFF', fill:C_HEAD, jc:(jcs && jcs[i]) || 'left' }));
+
+  /* ---------- Graphiques natifs ---------- */
+  const NS_C = 'xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:c16r2="http://schemas.microsoft.com/office/drawing/2015/06/chart"';
+  const colLetter = i => String.fromCharCode(65 + i);
+  const txPr = sz => `<c:txPr><a:bodyPr/><a:lstStyle/><a:p><a:pPr><a:defRPr sz="${sz}"><a:latin typeface="Arial Narrow" panose="020B0606020202030204" pitchFamily="34" charset="0"/></a:defRPr></a:pPr><a:endParaRPr lang="fr-FR"/></a:p></c:txPr>`;
+  function strCache(arr){ return `<c:ptCount val="${arr.length}"/>` + arr.map((v,i)=>`<c:pt idx="${i}"><c:v>${esc(v)}</c:v></c:pt>`).join(''); }
+  function numCache(arr){ return `<c:formatCode>General</c:formatCode><c:ptCount val="${arr.length}"/>` + arr.map((v,i)=> v == null ? '' : `<c:pt idx="${i}"><c:v>${v}</c:v></c:pt>`).join(''); }
+  function serXml(idx, name, cats, vals, color, o){
+    const n = cats.length, col = colLetter(idx + 1);
+    o = o || {};
+    let dpt = '';
+    if(o.ptColors) dpt = o.ptColors.map((c, i) => `<c:dPt><c:idx val="${i}"/><c:invertIfNegative val="0"/><c:bubble3D val="0"/><c:spPr><a:solidFill><a:srgbClr val="${c}"/></a:solidFill></c:spPr></c:dPt>`).join('');
+    const dl = o.labels ? `<c:dLbls><c:numFmt formatCode="0" sourceLinked="0"/><c:spPr><a:noFill/><a:ln><a:noFill/></a:ln></c:spPr><c:txPr><a:bodyPr rot="0" vert="horz"/><a:lstStyle/><a:p><a:pPr><a:defRPr sz="800"/></a:pPr><a:endParaRPr lang="fr-FR"/></a:p></c:txPr><c:dLblPos val="outEnd"/><c:showLegendKey val="0"/><c:showVal val="1"/><c:showCatName val="0"/><c:showSerName val="0"/><c:showPercent val="0"/><c:showBubbleSize val="0"/></c:dLbls>` : '';
+    const sp = o.radar ? `<c:spPr><a:ln w="22225"><a:solidFill><a:srgbClr val="${color}"/></a:solidFill></a:ln></c:spPr><c:marker><c:symbol val="circle"/><c:size val="5"/></c:marker>`
+                       : `<c:spPr><a:solidFill><a:srgbClr val="${color}"/></a:solidFill></c:spPr><c:invertIfNegative val="0"/>`;
+    return `<c:ser><c:idx val="${idx}"/><c:order val="${idx}"/><c:tx><c:strRef><c:f>Feuil1!$${col}$1</c:f><c:strCache>${strCache([name])}</c:strCache></c:strRef></c:tx>` +
+      sp + dpt + dl +
+      `<c:cat><c:strRef><c:f>Feuil1!$A$2:$A$${n + 1}</c:f><c:strCache>${strCache(cats)}</c:strCache></c:strRef></c:cat>` +
+      `<c:val><c:numRef><c:f>Feuil1!$${col}$2:$${col}$${n + 1}</c:f><c:numCache>${numCache(vals)}</c:numCache></c:numRef></c:val></c:ser>`;
+  }
+  const noLbls = '<c:dLbls><c:showLegendKey val="0"/><c:showVal val="0"/><c:showCatName val="0"/><c:showSerName val="0"/><c:showPercent val="0"/><c:showBubbleSize val="0"/></c:dLbls>';
+  const chartHead = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' + `<c:chartSpace ${NS_C}><c:date1904 val="1"/><c:lang val="fr-FR"/><c:roundedCorners val="0"/><c:style val="2"/><c:chart><c:autoTitleDeleted val="1"/>`;
+  const chartTail = sz => `<c:plotVisOnly val="1"/><c:dispBlanksAs val="gap"/></c:chart>${txPr(sz)}<c:externalData r:id="rId1"><c:autoUpdate val="0"/></c:externalData></c:chartSpace>`;
+
+  function radarChartXml(cats, vals, serName){
+    return chartHead + '<c:plotArea><c:layout><c:manualLayout><c:layoutTarget val="inner"/><c:xMode val="edge"/><c:yMode val="edge"/><c:x val="0.33"/><c:y val="0.2"/><c:w val="0.34"/><c:h val="0.6"/></c:manualLayout></c:layout>' +
+      '<c:radarChart><c:radarStyle val="marker"/><c:varyColors val="0"/>' + serXml(0, serName, cats, vals, '2E86AB', { radar:true }) + noLbls +
+      '<c:axId val="333333333"/><c:axId val="444444444"/></c:radarChart>' +
+      '<c:catAx><c:axId val="333333333"/><c:scaling><c:orientation val="minMax"/></c:scaling><c:delete val="0"/><c:axPos val="b"/><c:numFmt formatCode="General" sourceLinked="0"/><c:majorTickMark val="none"/><c:minorTickMark val="cross"/><c:tickLblPos val="nextTo"/><c:crossAx val="444444444"/><c:crosses val="autoZero"/><c:auto val="1"/><c:lblAlgn val="ctr"/><c:lblOffset val="100"/><c:noMultiLvlLbl val="1"/></c:catAx>' +
+      '<c:valAx><c:axId val="444444444"/><c:scaling><c:orientation val="minMax"/><c:max val="100"/><c:min val="0"/></c:scaling><c:delete val="1"/><c:axPos val="l"/><c:majorGridlines/><c:numFmt formatCode="0" sourceLinked="0"/><c:majorTickMark val="none"/><c:minorTickMark val="cross"/><c:tickLblPos val="nextTo"/><c:crossAx val="333333333"/><c:crosses val="autoZero"/><c:crossBetween val="between"/><c:majorUnit val="25"/></c:valAx>' +
+      '<c:spPr><a:noFill/><a:ln><a:noFill/></a:ln></c:spPr></c:plotArea>' + chartTail(1000);
+  }
+  // series : [{name, vals, color, ptColors}]
+  function barChartXml(cats, series, o){
+    o = o || {};
+    const sers = series.map((s, i) => serXml(i, s.name, cats, s.vals, s.color, { ptColors:s.ptColors, labels:o.labels })).join('');
+    return chartHead + '<c:plotArea><c:layout/><c:barChart><c:barDir val="bar"/><c:grouping val="clustered"/><c:varyColors val="0"/>' + sers + noLbls +
+      '<c:gapWidth val="60"/><c:axId val="111111111"/><c:axId val="222222222"/></c:barChart>' +
+      `<c:catAx><c:axId val="111111111"/><c:scaling><c:orientation val="minMax"/></c:scaling><c:delete val="0"/><c:axPos val="l"/><c:numFmt formatCode="General" sourceLinked="0"/><c:majorTickMark val="cross"/><c:minorTickMark val="cross"/><c:tickLblPos val="nextTo"/>${txPr(o.catSz || 900)}<c:crossAx val="222222222"/><c:crosses val="autoZero"/><c:auto val="1"/><c:lblAlgn val="ctr"/><c:lblOffset val="100"/><c:tickLblSkip val="1"/><c:tickMarkSkip val="1"/><c:noMultiLvlLbl val="1"/></c:catAx>` +
+      '<c:valAx><c:axId val="222222222"/><c:scaling><c:orientation val="minMax"/><c:max val="100"/><c:min val="0"/></c:scaling><c:delete val="0"/><c:axPos val="b"/><c:numFmt formatCode="0" sourceLinked="0"/><c:majorTickMark val="cross"/><c:minorTickMark val="none"/><c:tickLblPos val="nextTo"/><c:crossAx val="111111111"/><c:crosses val="autoZero"/><c:crossBetween val="between"/></c:valAx>' +
+      '<c:spPr><a:noFill/><a:ln><a:noFill/></a:ln></c:spPr></c:plotArea>' +
+      (o.legend ? '<c:legend><c:legendPos val="t"/><c:overlay val="0"/></c:legend>' : '') + chartTail(o.sz || 900);
+  }
+  const wrapLabel = (s, n) => {
+    const words = String(s).split(' '); const lines = []; let cur = '';
+    words.forEach(w => { if((cur + ' ' + w).trim().length > n && cur){ lines.push(cur); cur = w; } else cur = (cur + ' ' + w).trim(); });
+    if(cur) lines.push(cur); return lines.join('\n');
+  };
+
+  /* ---------- Construction du document ---------- */
+  function build(model, deps){
+    const XLSX = deps.XLSX;
+    const charts = [];            // {xml, xlsx}
+    let tblN = 0, figN = 0;
+    const body = [];
+    const add = (...x) => x.forEach(v => body.push(v));
+
+    function registerChart(xml, header, rows){
+      const aoa = [header].concat(rows);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), 'Feuil1');
+      const xlsx = XLSX.write(wb, { bookType:'xlsx', type:'array' });
+      charts.push({ xml, xlsx });
+      return charts.length;
+    }
+    function chartPara(idx, cx, cy){
+      const id = 30000 + idx;
+      return '<w:p><w:pPr><w:keepNext/><w:spacing w:after="120" w:line="360" w:lineRule="auto"/><w:jc w:val="center"/>' + rpr({}) + '</w:pPr><w:r><w:rPr>' + FONT + '<w:noProof/><w:sz w:val="26"/><w:szCs w:val="26"/></w:rPr>' +
+        `<w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0"><wp:extent cx="${cx}" cy="${cy}"/><wp:effectExtent l="0" t="0" r="0" b="0"/><wp:docPr id="${id}" name="Graphique ${idx}"/><wp:cNvGraphicFramePr/>` +
+        `<a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/chart"><c:chart xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" r:id="rIdC${idx}"/></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>`;
+    }
+
+    /* ----- Analyse des données ----- */
+    const D = model.domains, IND = model.indicators;
+    const fsAll = model.fs.map(f => Object.assign({}, f, { pct: f.denom > 0 ? f.total / f.denom * 100 : null }));
+    const fsOk = fsAll.filter(f => f.pct != null);
+    const mean = a => a.length ? a.reduce((s, x) => s + x, 0) / a.length : 0;
+    const zoneMean = mean(fsOk.map(f => f.pct));
+    const typesPresent = GROUPS.filter(g => fsAll.some(f => f.type === g.key));
+    const groupStats = typesPresent.map(g => {
+      const arr = fsOk.filter(f => f.type === g.key).map(f => f.pct);
+      return { g, n: fsAll.filter(f => f.type === g.key).length, mean: mean(arr), min: arr.length ? Math.min(...arr) : null, max: arr.length ? Math.max(...arr) : null };
+    });
+    // score agrégé d'un domaine / d'un indicateur sur un ensemble de FS (somme des scores / somme des plafonds)
+    function domPct(list, key){
+      let s = 0, p = 0;
+      list.forEach(f => { const d = f.domains[key]; if(d && !d.na){ s += d.score; p += d.plafond; } });
+      return p > 0 ? s / p * 100 : null;
+    }
+    function indAgg(list, id){
+      let s = 0, p = 0, nFs = 0, under50 = 0;
+      list.forEach(f => { const i = f.ind[id]; if(i && !i.na){ s += i.score; p += i.plafond; nFs++; if(i.plafond > 0 && i.score / i.plafond * 100 < 50) under50++; } });
+      return { pct: p > 0 ? s / p * 100 : null, nFs, under50 };
+    }
+    const domZone = D.map(d => ({ d, pct: domPct(fsAll, d.key) }));
+    const domOk = domZone.filter(x => x.pct != null);
+    const indZone = IND.map(i => Object.assign({ i }, indAgg(fsAll, i.id)));
+    const indOk = indZone.filter(x => x.pct != null);
+    const domLabelOf = key => (D.find(d => d.key === key) || {}).label || key;
+    const letter = k => String.fromCharCode(65 + D.findIndex(d => d.key === k));
+    const domTitle = d => `${letter(d.key)}. ${d.label}`;
+    const join = arr => arr.length <= 1 ? (arr[0] || '') : arr.slice(0, -1).join(', ') + ' et ' + arr[arr.length - 1];
+    const plur = (n, s, p) => n > 1 ? p : s;
+
+    /* ===== PAGE DE GARDE ===== */
+    const cover = (t, o) => para(t === '' ? '' : run(t, o), { jc:'center', line:360 });
+    add(cover('MINISTÈRE DE LA SANTÉ', { b:true }));
+    add(cover(`DIRECTION DÉPARTEMENTALE DE LA SANTÉ : ${(model.departement || '').toUpperCase() || 'XXX'}`, { b:true }));
+    add(cover(`ZONE SANITAIRE : ${model.zone.toUpperCase()}`, { b:true }));
+    if(model.commune) add(cover(`COMMUNE : ${model.commune.toUpperCase()}`, { b:true }));
+    add(cover(''));
+    add(cover("Rapport d'évaluation de la performance des formations sanitaires en surveillance épidémiologique", { b:true, color:C_HEAD }));
+    add(cover(''));
+    add(cover(`Période évaluée : ${model.year}`, { b:true, u:true }));
+    add(cover(''));
+    add(para(run(model.dateLabel), { jc:'both' }));
+    add(PAGEBREAK);
+
+    /* ===== ÉQUIPE D'ÉVALUATION ===== */
+    add(H1("Équipe d'évaluation"));
+    tblN++; add(tableCaption(tblN, "Composition de l'équipe d'évaluation de terrain"));
+    const teamW = [700, 5000, 3700];
+    const teamRows = (list) => [{ header:true, cells: hdrCells(['N°','Nom et prénom','Titre/qualification'], ['center','left','left']) }].concat(
+      (list.length ? list : [{ nom:'(à compléter)', qualif:'' }]).map((m, i) => ({ cells:[ { t: list.length ? String(i + 1) : '', jc:'center' }, { t:m.nom }, { t:m.qualif || '' } ] })));
+    add(table(teamW, teamRows(model.evalTeam)));
+    add(para('', {}));
+    add(para(run('Supervision de l\'évaluation :', { b:true }), { keepNext:true }));
+    tblN++;
+    add(table(teamW, teamRows(model.supervision)));
+    add(PAGEBREAK);
+
+    /* ===== 1. INTRODUCTION / 2. MÉTHODES (texte du modèle) ===== */
+    const nByType = typesPresent.map(g => ({ g, n: fsAll.filter(f => f.type === g.key).length }));
+    const totalFs = `Au total, ${fsAll.length} formation${plur(fsAll.length,'','s')} sanitaire${plur(fsAll.length,'','s')}` +
+      (nByType.length ? ` (${join(nByType.map(x => `${x.n} ${x.n > 1 ? x.g.plural : ({publiques:'publique',privées:'privée',hôpitaux:'hôpital'})[x.g.plural]}`))})` : '') +
+      ` ${plur(fsAll.length,'a été évaluée','ont été évaluées')} dans la zone sanitaire.`;
+    const tok = t => t.replace(/\{\{ZONE\}\}/g, model.zone).replace(/\{\{YEAR\}\}/g, model.year).replace(/\{\{TOTALFS\}\}/g, totalFs);
+    model.staticSpec.forEach(it => {
+      if(it.k === 'empty'){ return; }
+      const runs = it.r.map(r => run(tok(r[0]), { b: r[1] }));
+      if(it.k === 'h1'){
+        const first = it.r[0][0];
+        if(/^3\./.test(first)) return;     // la section 3 est écrite ci-dessous
+        add(H1(tok(first)));
+      }
+      else if(it.k === 'h2') add(H2(tok(it.r[0][0])));
+      else if(it.k === 'h3') add(H3(tok(it.r[0][0])));
+      else if(it.k === 'li') add(LI(runs));
+      else add(para(runs, {}));
+    });
+
+    /* ===== 3. RÉSULTATS ===== */
+    add(H1("3. Résultats de l'évaluation"));
+    add(H2('3.1 Analyse par formation sanitaire'));
+    const partialNA = D.map(d => {
+      const t = typesPresent.filter(g => fsAll.some(f => f.type === g.key && f.domains[d.key] && !f.domains[d.key].na));
+      const nt = typesPresent.filter(g => fsAll.some(f => f.type === g.key && f.domains[d.key] && f.domains[d.key].na));
+      return { d, apply: t, notApply: nt };
+    }).filter(x => x.notApply.length && x.apply.length);
+    let intro31 = "Pour chaque formation sanitaire, la synthèse globale et le profil de performance par domaine sont suivis d'un tableau détaillant l'ensemble des indicateurs applicables, regroupés par domaine. La colonne « Données collectées » indique le numérateur et le dénominateur (ou la réponse Oui/Non) saisis lors de l'évaluation, et la colonne « Score » le pourcentage du score plafond atteint par l'indicateur (score obtenu rapporté au score plafond, selon la grille de pondération) ; le score du domaine, somme des scores obtenus rapportée à la somme des scores plafonds, figure sur la ligne du domaine. Les indicateurs non applicables au type de la formation sanitaire sont exclus du calcul, et les domaines entièrement non applicables n'apparaissent pas dans les tableaux.";
+    partialNA.forEach(x => { intro31 += ` Le domaine « ${x.d.label} » ne concerne pas ${join(x.notApply.map(g => g.phrase))}.`; });
+    add(P(intro31));
+
+    fsAll.forEach(f => {
+      add(H3(`${f.name} (${SECTOR[f.type] || f.type})`));
+      const doms = D.filter(d => f.domains[d.key] && !f.domains[d.key].na).map(d => ({ d, pct: f.domains[d.key].plafond > 0 ? f.domains[d.key].score / f.domains[d.key].plafond * 100 : 0 }));
+      if(f.pct == null){
+        add(P(`${f.name} ne comporte aucun indicateur applicable : aucun score de performance n'a pu être calculé.`));
+      } else {
+        const sorted = doms.slice().sort((a, b) => b.pct - a.pct);
+        const best = sorted[0], worst = sorted[sorted.length - 1];
+        const runs = [ run(`${f.name} obtient un score global de performance de `), run(pc(f.pct), { b:true }) ];
+        let tail = '.';
+        if(sorted.length >= 2 && best.d.key !== worst.d.key){
+          tail = `. Le domaine le plus solide est « ${best.d.label} » (${pc(best.pct)}), tandis que le domaine le plus faible est « ${worst.d.label} » (${pc(worst.pct)}), ${worst.pct < 50 ? 'qui mérite une attention prioritaire' : 'qui reste le principal axe d\'amélioration'}.`;
+        }
+        runs.push(run(tail));
+        add(para(runs, {}));
+      }
+      tblN++; add(tableCaption(tblN, `Indicateurs de synthèse — ${f.name}`));
+      add(table([6200, 2200], [
+        { header:true, cells: hdrCells(['Indicateur', 'Valeur']) },
+        { cells:[ { t:'Score global de performance' }, f.pct == null ? { t:'N/A', b:true } : { t:pc(f.pct), b:true, color:colorOf(f.pct) } ] }
+      ], { mT:60, before:0, after:0, sz:26 }));
+      if(doms.length){
+        const cats = doms.map(x => wrapLabel(domTitle(x.d), 30));
+        const vals = doms.map(x => r1(x.pct));
+        const idx = registerChart(radarChartXml(cats, vals, 'Score (%)'), ['Catégorie', 'Score (%)'], cats.map((c, i) => [c, vals[i]]));
+        add(chartPara(idx, 6090699, 3143250));
+        figN++; add(figCaption(figN, `Profil de performance par domaine — ${f.name}`));
+      }
+      tblN++; add(tableCaption(tblN, `Détail des indicateurs — ${f.name}`));
+      const W = [700, 5400, 1700, 1600];
+      const rows = [{ header:true, cells: hdrCells(['Id', 'Indicateur', 'Données collectées', 'Score'], ['center','left','center','center']) }];
+      D.forEach(d => {
+        const ds = f.domains[d.key]; if(!ds || ds.na) return;
+        const dp = ds.plafond > 0 ? ds.score / ds.plafond * 100 : 0;
+        rows.push({ cells:[ { t:domTitle(d), b:true, fill:C_DOM, span:3 }, { t:pc(dp), b:true, fill:C_DOM, jc:'center' } ] });
+        IND.filter(i => i.domain === d.key).forEach(i => {
+          const x = f.ind[i.id]; if(!x || x.na) return;
+          rows.push({ cells:[ { t:`Id ${i.id}`, jc:'center' }, { t:i.label }, { t:x.data, jc:'center' }, { t:pc(x.plafond > 0 ? x.score / x.plafond * 100 : 0), jc:'center' } ] });
+        });
+      });
+      add(table(W, rows));
+      add(SPACER);
+    });
+
+    /* ===== 3.2 ANALYSE DE L'ENSEMBLE DES FS ===== */
+    add(H2("3.2 Analyse de l'ensemble des formations sanitaires de la zone"));
+    const ranked = fsOk.slice().sort((a, b) => a.pct - b.pct);
+    if(ranked.length){
+      const worst = ranked[0], best = ranked[ranked.length - 1];
+      let t = `La formation sanitaire la plus performante de la zone est ${best.name} (${pc(best.pct)}), tandis que la moins performante est ${worst.name} (${pc(worst.pct)}). Le score moyen de performance de la zone sanitaire s'établit à ${pc(zoneMean)}`;
+      const gs = groupStats.filter(x => x.n > 0 && x.mean != null && fsOk.some(f => f.type === x.g.key));
+      if(gs.length >= 2) t += `, avec des disparités entre ${join(gs.map((x, i) => `${x.g.phrase} (${pc(x.mean)}${i === 0 ? ' en moyenne' : ''})`))}`;
+      add(P(t + '.'));
+      // Figure : meilleurs / moins bons
+      let topN, botN;
+      if(ranked.length <= 20){ topN = ranked.length; botN = 0; }
+      else { topN = Math.min(20, Math.ceil(ranked.length / 2)); botN = Math.min(20, ranked.length - topN); }
+      const mkBar = (arr, serName) => {
+        const cats = arr.map(f => f.name), vals = arr.map(f => r1(f.pct));
+        const xml = barChartXml(cats, [{ name:serName, vals, color:BAR_RED, ptColors: arr.map(f => barColorOf(f.pct)) }], { labels:true, catSz:900, sz:900 });
+        return registerChart(xml, ['Catégorie', serName], cats.map((c, i) => [c, vals[i]]));
+      };
+      const hBar = n => Math.max(1800000, 215000 * n + 450000);
+      if(botN === 0){
+        const arr = ranked.slice();               // croissant : la meilleure en haut
+        add(chartPara(mkBar(arr, 'Score global de performance (%)'), 6018530, hBar(arr.length)));
+        figN++; add(figCaption(figN, 'Score global de performance SIMR par formation sanitaire'));
+      } else {
+        const top = ranked.slice(ranked.length - topN);
+        const bot = ranked.slice(0, botN);
+        add(chartPara(mkBar(top, 'Score global de performance (%)'), 6018530, hBar(top.length)));
+        add(chartPara(mkBar(bot, 'Score global de performance (%)'), 6018530, hBar(bot.length)));
+        figN++; add(figCaption(figN, `Score global de performance SIMR par formation sanitaire (en haut : les ${topN} formations les plus performantes ; en bas : les ${botN} moins performantes)`));
+      }
+    } else {
+      add(P("Aucun score de performance n'a pu être calculé pour les formations sanitaires de la zone."));
+    }
+
+    /* -- Points de faiblesse -- */
+    add(H3("Points de faiblesse relevés par l'évaluation"));
+    const dSorted = domOk.slice().sort((a, b) => a.pct - b.pct);
+    const weakIndsOf = (key, n) => indOk.filter(x => x.i.domain === key).sort((a, b) => a.pct - b.pct).slice(0, n);
+    const indPhrase = x => `${SHORT[x.i.id] || x.i.label} (${pc(x.pct)})`;
+    if(dSorted.length){
+      const n = dSorted.length, parts = [];
+      const w0 = dSorted[0];
+      let s0 = `Le domaine « ${w0.d.label} » constitue ${n > 1 ? 'le principal point de faiblesse' : 'le seul domaine évalué'} de la zone (${pc(w0.pct)})`;
+      const wi = weakIndsOf(w0.d.key, 4).filter(x => x.pct < 75);
+      if(wi.length) s0 += `${n > 1 ? ' : il est pénalisé par ' : ', pénalisé par '}${join(wi.map(indPhrase))}`;
+      parts.push(s0 + '.');
+      let used = 1;
+      if(n >= 3){
+        const w1 = dSorted[1]; used = 2;
+        const wi1 = weakIndsOf(w1.d.key, 2).filter(x => x.pct < 75);
+        parts.push(`Vient ensuite le domaine « ${w1.d.label} » (${pc(w1.pct)})${wi1.length ? `, où les principales insuffisances portent sur ${join(wi1.map(indPhrase))}` : ''}.`);
+      }
+      const rest = dSorted.slice(used);
+      if(rest.length){
+        const strong = rest.slice(-Math.min(2, rest.length)).reverse();
+        const inter = rest.slice(0, rest.length - strong.length);
+        let s2 = `À l'inverse, ${join(strong.map(x => `« ${x.d.label} » (${pc(x.pct)})`))} ressort${strong.length > 1 ? 'ent' : ''} comme ${strong.length > 1 ? 'les domaines les plus solides' : 'le domaine le plus solide'} de la zone`;
+        if(inter.length) s2 += `, ${join(inter.map(x => `le domaine « ${x.d.label} »`))} se situant à un niveau intermédiaire (${join(inter.map(x => pc(x.pct)))})`;
+        parts.push(s2 + '.');
+      }
+      partialNA.forEach(x => { parts.push(`Le domaine « ${x.d.label} » n'est évalué que dans ${join(x.apply.map(g => g.phrase))} ; il ne concerne pas ${join(x.notApply.map(g => g.phrase))}.`); });
+      add(P(parts.join(' ')));
+    }
+    // Figure : score moyen par domaine / type de structure
+    if(domOk.length){
+      const cats = domOk.map(x => domTitle(x.d));
+      const series = groupStats.filter(x => fsAll.some(f => f.type === x.g.key)).map((x, i) => ({
+        name: x.g.short, color: ['2E86AB', 'A23B72', 'F18F01'][i % 3],
+        vals: domOk.map(dz => { const v = domPct(fsAll.filter(f => f.type === x.g.key), dz.d.key); return v == null ? null : r1(v); })
+      }));
+      series.push({ name:'Moyenne de la zone', color:'444444', vals: domOk.map(dz => r1(dz.pct)) });
+      const xml = barChartXml(cats, series, { legend:true, sz:1000, catSz:1000 });
+      const idx = registerChart(xml, ['Catégorie'].concat(series.map(s => s.name)), cats.map((c, i) => [c].concat(series.map(s => s.vals[i]))));
+      add(chartPara(idx, 6018530, 3600000));
+      figN++; add(figCaption(figN, "Score moyen par domaine, par type de structure et pour l'ensemble de la zone sanitaire"));
+    }
+
+    /* -- Répartition par niveau -- */
+    add(H3('Répartition des formations sanitaires selon le niveau de performance'));
+    const hi = fsOk.filter(f => f.pct >= 75).sort((a, b) => b.pct - a.pct);
+    const mid = fsOk.filter(f => f.pct >= 50 && f.pct < 75);
+    const lo = fsOk.filter(f => f.pct < 50).sort((a, b) => a.pct - b.pct);
+    const names = (arr, withPct) => arr.length && arr.length <= 12 ? ` (${join(arr.map(f => withPct ? `${f.name} (${pc(f.pct)})` : f.name))})` : '';
+    add(P(`En retenant trois classes de performance (score global inférieur à 50%, de 50% à 74%, supérieur ou égal à 75%), ${hi.length} formation${plur(hi.length,'','s')} sanitaire${plur(hi.length,'','s')} ${plur(hi.length,'atteint','atteignent')} un niveau satisfaisant${names(hi, false)}, ${mid.length} se ${plur(mid.length,'situe','situent')} à un niveau intermédiaire et ${lo.length} ${plur(lo.length,'présente','présentent')} un score inférieur à 50%${names(lo, true)}.`));
+
+    /* -- Comparaison entre types -- */
+    add(H3('Comparaison entre types de structures'));
+    add(P('Le tableau ci-dessous présente le score global de performance moyen, minimal et maximal par type de structure.'));
+    tblN++; add(tableCaption(tblN, 'Score global de performance par type de structure'));
+    const gRows = [{ header:true, cells: hdrCells(['Groupe', 'Nombre de FS', 'Score moyen', 'Minimum', 'Maximum'], ['left','center','center','center','center']) }];
+    groupStats.forEach(x => gRows.push({ cells:[ { t:x.g.label }, { t:String(x.n), jc:'center' }, { t: x.mean != null && x.min != null ? pc(x.mean) : '—', jc:'center' }, { t: x.min != null ? pc(x.min) : '—', jc:'center' }, { t: x.max != null ? pc(x.max) : '—', jc:'center' } ] }));
+    gRows.push({ cells:[ { t:'Ensemble de la zone', b:true, fill:C_DOM }, { t:String(fsAll.length), b:true, fill:C_DOM, jc:'center' }, { t: fsOk.length ? pc(zoneMean) : '—', b:true, fill:C_DOM, jc:'center' }, { t: fsOk.length ? pc(Math.min(...fsOk.map(f => f.pct))) : '—', b:true, fill:C_DOM, jc:'center' }, { t: fsOk.length ? pc(Math.max(...fsOk.map(f => f.pct))) : '—', b:true, fill:C_DOM, jc:'center' } ] });
+    add(table([3600, 1400, 1500, 1450, 1450], gRows));
+    add(SPACER);
+    const gp = groupStats.find(x => x.g.key === 'Publique' && x.mean != null && x.min != null), gv = groupStats.find(x => x.g.key === 'Privée' && x.mean != null && x.min != null);
+    if(gp && gv){
+      const pubF = fsAll.filter(f => f.type === 'Publique'), privF = fsAll.filter(f => f.type === 'Privée');
+      const gaps = D.map(d => ({ d, a: domPct(pubF, d.key), b: domPct(privF, d.key) })).filter(x => x.a != null && x.b != null).sort((x, y) => Math.abs(y.a - y.b) - Math.abs(x.a - x.b)).slice(0, 2);
+      let t = `Les formations publiques atteignent en moyenne ${pc(gp.mean)} contre ${pc(gv.mean)} pour les formations privées.`;
+      if(gaps.length) t += ` L'écart est le plus net sur ${gaps.length > 1 ? 'les domaines' : 'le domaine'} ${join(gaps.map(x => `« ${x.d.label} » (${pc(x.a)} contre ${pc(x.b)})`))}.`;
+      add(P(t));
+    }
+
+    /* -- Indicateurs les plus solides / faibles -- */
+    add(H3('Indicateurs les plus solides et les plus faibles'));
+    const byPct = indOk.slice().sort((a, b) => b.pct - a.pct);
+    const strongest = byPct.slice(0, 5).filter(x => x.pct >= 50), weakest = indOk.slice().sort((a, b) => a.pct - b.pct).slice(0, 6).filter(x => x.pct < 75);
+    const ip = x => `${SHORT[x.i.id] || x.i.label} (Id ${x.i.id} : ${pc(x.pct)})`;
+    let t5 = '';
+    if(strongest.length) t5 += `Les indicateurs les plus solides à l'échelle de la zone sont ${join(strongest.map(ip))}.`;
+    if(weakest.length) t5 += `${t5 ? ' À l\'opposé, ' : 'Les '}les indicateurs les plus faibles concernent ${join(weakest.map(ip))}.`.replace('Les les', 'Les');
+    if(t5) add(P(t5));
+
+    /* -- Complétude, promptitude, limites -- */
+    add(H3("Complétude, promptitude, recherches actives et limites de l'analyse"));
+    const z = id => { const x = indZone.find(y => y.i.id === id); return x && x.pct != null ? pc(x.pct) : 'N/D'; };
+    const planAll = model.plan || [];
+    const freq = {};
+    planAll.forEach(r => { if(r.indicateur){ (freq[r.indicateur] = freq[r.indicateur] || new Set()).add(r.fs); } });
+    const topPlan = Object.keys(freq).map(k => ({ id:+k, n:freq[k].size })).sort((a, b) => b.n - a.n).slice(0, 2);
+    let lim = `Les indicateurs Id 12 (recherches actives dans les sites prioritaires), Id 19 (complétude des rapports hebdomadaires) et Id 20 (promptitude des rapports hebdomadaires) ont été calculés à partir des données centralisées transmises par l'administrateur pour chaque formation sanitaire : ils atteignent respectivement ${z(12)}, ${z(19)} et ${z(20)} à l'échelle de la zone.`;
+    if(topPlan.length) lim += ` Le plan de résolution fait ressortir ${join(topPlan.map(x => `${SHORT[x.id] || 'l\'indicateur Id ' + x.id} (Id ${x.id} : ${x.n} formation${plur(x.n,'','s')} sanitaire${plur(x.n,'','s')})`))} parmi les problèmes les plus fréquemment cités.`;
+    lim += " Les indicateurs non applicables au type de structure sont exclus du calcul des scores (somme des scores obtenus rapportée à la somme des scores plafonds applicables). L'analyse de la discordance des données n'est pas présentée dans ce rapport.";
+    add(P(lim));
+    add(PAGEBREAK);
+
+    /* ===== 3.3 SYNTHÈSE ET PRIORISATION ===== */
+    add(H2('3.3 Synthèse et priorisation de la zone'));
+    tblN++; add(tableCaption(tblN, 'Synthèse et priorisation des indicateurs de la zone sanitaire'));
+    const sRows = [{ header:true, cells: hdrCells(['N°', "Intitulé de l'indicateur", 'Score zone (%)'], ['center','left','center']) }];
+    domZone.forEach(dz => {
+      if(dz.pct == null) return;
+      sRows.push({ cells:[ { t:domTitle(dz.d), b:true, fill:C_DOM, span:2 }, { t:pc(dz.pct), b:true, color:colorOf(dz.pct), fill:C_DOM, jc:'center' } ] });
+      indZone.filter(x => x.i.domain === dz.d.key && x.pct != null).forEach(x => sRows.push({ cells:[ { t:`Id ${x.i.id}`, jc:'center' }, { t:x.i.label }, { t:pc(x.pct), b:true, color:colorOf(x.pct), jc:'center' } ] }));
+    });
+    add(table([800, 6900, 1700], sRows));
+    add(SPACER);
+    add(H3('Commentaire du niveau des indicateurs'));
+    if(dSorted.length){
+      const strongD = dSorted.slice(-Math.min(2, dSorted.length)).reverse(), weakD = dSorted[0];
+      const wi = weakIndsOf(weakD.d.key, 3).filter(x => x.pct < 75);
+      let c = '';
+      if(dSorted.length >= 2) c += `Les domaines les plus performants de la zone sont ${join(strongD.map(x => `« ${x.d.label} » (${pc(x.pct)})`))}. À l'inverse, le domaine « ${weakD.d.label} » affiche le score le plus faible (${pc(weakD.pct)})${wi.length ? `, tiré vers le bas par ${join(wi.map(x => SHORT[x.i.id] || x.i.label))}` : ''}. `;
+      else c += `Le domaine « ${weakD.d.label} » affiche un score de ${pc(weakD.pct)}. `;
+      add(P(c + `La Figure ${figN + 1} présente les dix indicateurs les plus faibles à l'échelle de la zone sanitaire.`));
+    } else add(P(`La Figure ${figN + 1} présente les dix indicateurs les plus faibles à l'échelle de la zone sanitaire.`));
+    const w10 = indOk.slice().sort((a, b) => a.pct - b.pct).slice(0, 10);
+    if(w10.length){
+      const arr = w10.slice().reverse();         // le plus faible en haut du graphique
+      const cats = arr.map(x => `Id ${x.i.id}. ${x.i.label}`.slice(0, 80)), vals = arr.map(x => r1(x.pct));
+      const xml = barChartXml(cats, [{ name:'Score zone (%)', vals, color:C_RED }], { labels:true, catSz:900, sz:900 });
+      const idx = registerChart(xml, ['Catégorie', 'Score zone (%)'], cats.map((c, i) => [c, vals[i]]));
+      add(chartPara(idx, 6098650, 3810000));
+      figN++; add(figCaption(figN, "Les 10 indicateurs les plus faibles à l'échelle de la zone sanitaire"));
+    }
+
+    /* ===== 3.4 GRANDS CONSTATS ===== */
+    add(H2("3.4 Grands constats de l'évaluation et recommandations"));
+    tblN++; add(tableCaption(tblN, "Grands constats de l'évaluation et recommandations par domaine"));
+    const mkP = (t, sz) => ({ t, sz: sz || 20 });
+    const cRows = [{ header:true, cells: hdrCells(['Domaine', 'Points forts', 'Points à améliorer', 'Recommandations']) }];
+    domZone.forEach(dz => {
+      if(dz.pct == null) return;
+      const inds = indZone.filter(x => x.i.domain === dz.d.key && x.pct != null);
+      const forts = inds.filter(x => x.pct >= 75).sort((a, b) => b.pct - a.pct).slice(0, 5);
+      let faibles = inds.filter(x => x.pct < 50).sort((a, b) => a.pct - b.pct).slice(0, 5);
+      if(!faibles.length){ const l = inds.slice().sort((a, b) => a.pct - b.pct)[0]; if(l && l.pct < 75) faibles = [l]; }
+      const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
+      cRows.push({ keepRow:false, cells:[
+        { t:domTitle(dz.d), b:true, fill:C_DOM, sz:20 },
+        { paras: forts.length ? forts.map(x => mkP(`Id ${x.i.id} — ${SHORT[x.i.id] || x.i.label} (${pc(x.pct)})`)) : [mkP('—')], sz:20 },
+        { paras: faibles.length ? faibles.map(x => mkP(`Id ${x.i.id} — ${SHORT[x.i.id] || x.i.label} (${pc(x.pct)}${x.nFs ? ` ; ${x.under50} FS sous 50 %` : ''})`)) : [mkP('—')], sz:20 },
+        { paras: faibles.length ? faibles.map(x => mkP(RECO[x.i.id] || `Renforcer ${SHORT[x.i.id] || 'cet indicateur'}`)) : [mkP('—')], sz:20 }
+      ] });
+    });
+    add(table([1700, 2500, 2700, 2500], cRows, { mT:40, before:20, after:40, sz:20 }));
+    add(SPACER);
+
+    /* ===== 4. PLAN DE RÉSOLUTION ===== */
+    add(H1('4. Plan de résolution des problèmes de la zone'));
+    add(P("Ce plan consolide, par domaine, les problèmes les plus fréquemment relevés dans les plans de résolution élaborés avec chaque formation sanitaire, avec les causes et les activités proposées. Pour chaque problème, les causes et activités les plus fréquemment citées sont reprises ; la liste des formations sanitaires concernées figure dans la dernière colonne."));
+    tblN++; add(tableCaption(tblN, 'Plan de résolution des problèmes de la zone sanitaire'));
+    const indById = {}; IND.forEach(i => indById[i.id] = i);
+    const groups = {};
+    let totalCost = 0;
+    planAll.forEach(r => {
+      const iid = r.indicateur ? parseInt(r.indicateur) : NaN;
+      const hasInd = !isNaN(iid) && indById[iid];
+      const text = (r.ameliorer || '').trim();
+      if(!hasInd && !text && !(r.activite || '').trim()) return;
+      const dom = r.domain || (hasInd ? indById[iid].domain : '');
+      const key = dom + '|' + (hasInd ? 'I' + iid : 'T' + text.toLowerCase());
+      const g = groups[key] = groups[key] || { dom, iid: hasInd ? iid : null, text, fs:new Set(), causes:{}, acts:{} };
+      g.fs.add(r.fs);
+      const addTxt = (m, v) => { v = (v || '').trim(); if(!v) return; const k = v.toLowerCase(); (m[k] = m[k] || { t:v, n:0 }).n++; };
+      addTxt(g.causes, r.cause); addTxt(g.acts, r.activite);
+      const cn = parseFloat(String(r.cout || '').replace(/[^\d.,-]/g, '').replace(',', '.')); if(!isNaN(cn)) totalCost += cn;
+    });
+    const pRows = [{ header:true, cells: hdrCells(['Points à améliorer', 'Cause/goulot', 'Activité proposée', 'Formations sanitaires']) }];
+    let anyPlan = false;
+    D.forEach(d => {
+      const gl = Object.keys(groups).map(k => groups[k]).filter(g => g.dom === d.key).sort((a, b) => b.fs.size - a.fs.size || (a.iid || 999) - (b.iid || 999));
+      if(!gl.length) return;
+      anyPlan = true;
+      pRows.push({ cells:[ { t:domTitle(d), b:true, fill:C_DOM, span:4, sz:20 } ] });
+      gl.forEach(g => {
+        const top = m => Object.keys(m).map(k => m[k]).sort((a, b) => b.n - a.n).slice(0, 3).map(x => ({ t:x.t, sz:18 }));
+        const names = Array.from(g.fs).filter(Boolean);
+        pRows.push({ keepRow:false, cells:[
+          { paras:[ { t: g.iid ? `Id ${g.iid} — ${indById[g.iid].label}` : g.text, sz:20 } ] },
+          { paras: top(g.causes).length ? top(g.causes) : [{ t:'—', sz:18 }] },
+          { paras: top(g.acts).length ? top(g.acts) : [{ t:'—', sz:18 }] },
+          { paras:[ { t:`${names.length} formation${plur(names.length,'','s')} : ${names.join(', ')}`, sz:18 } ] }
+        ] });
+      });
+    });
+    if(anyPlan){
+      add(table([2300, 2100, 2500, 2500], pRows, { mT:40, before:20, after:40, sz:20 }));
+      add(SPACER);
+      if(totalCost > 0) add(P(`Le coût estimatif cumulé des activités proposées dans les plans de résolution s'élève à ${Math.round(totalCost).toLocaleString('fr-FR')} (unité monétaire de saisie).`));
+    } else {
+      add(P("Aucun plan de résolution n'a encore été renseigné par les formations sanitaires de cette zone ; il sera finalisé avec chaque formation sanitaire lors de l'atelier de restitution.", { i:true }));
+    }
+
+    /* ===== 5. CONCLUSION ===== */
+    add(H1('5. Conclusion'));
+    let c1 = `L'évaluation de la performance de la surveillance épidémiologique conduite dans la zone sanitaire ${model.zone} en ${model.year} a couvert ${fsAll.length} formation${plur(fsAll.length,'','s')} sanitaire${plur(fsAll.length,'','s')}`;
+    if(fsOk.length){
+      c1 += `. Le score moyen de performance de la zone s'établit à ${pc(zoneMean)}`;
+      if(gp && gv) c1 += `, les formations publiques atteignant ${pc(gp.mean)} en moyenne contre ${pc(gv.mean)} pour les formations privées`;
+      c1 += `. ${hi.length} formation${plur(hi.length,'','s')} sanitaire${plur(hi.length,'','s')} ${plur(hi.length,'atteint','atteignent')} un niveau satisfaisant (≥ 75%) et ${lo.length} ${plur(lo.length,'présente','présentent')} un score inférieur à 50%`;
+    }
+    add(P(c1 + '.'));
+    if(dSorted.length >= 2){
+      const strongD = dSorted.slice(-Math.min(2, dSorted.length)).reverse(), weakD = dSorted[0];
+      const wi = weakIndsOf(weakD.d.key, 3).filter(x => x.pct < 75);
+      add(P(`Les domaines ${join(strongD.map(x => `« ${x.d.label} » (${pc(x.pct)})`))} ressortent comme les plus solides, tandis que le domaine « ${weakD.d.label} » (${pc(weakD.pct)}) constitue la principale faiblesse de la zone${wi.length ? `, en particulier ${join(wi.map(x => SHORT[x.i.id] || x.i.label))}` : ''}.`));
+    }
+    if(anyPlan){
+      const topInds = Object.keys(groups).map(k => groups[k]).filter(g => g.iid).sort((a, b) => b.fs.size - a.fs.size).slice(0, 3);
+      add(P(`Le plan de résolution des problèmes proposé au chapitre 4 dégage des priorités d'action${topInds.length ? `, notamment ${join(topInds.map(g => `${SHORT[g.iid] || 'l\'indicateur Id ' + g.iid} (Id ${g.iid} : ${g.fs.size} formation${plur(g.fs.size,'','s')} sanitaire${plur(g.fs.size,'','s')})`))}` : ''}. Ces priorités seront consolidées lors de l'atelier de restitution avec l'appui de la DDS, puis suivies à l'occasion de l'évaluation semestrielle des formations sanitaires.`));
+    } else {
+      add(P("Les plans de résolution des problèmes seront finalisés avec chaque formation sanitaire lors de l'atelier de restitution, avec l'appui de la DDS, puis suivis à l'occasion de l'évaluation semestrielle des formations sanitaires."));
+    }
+
+    return { bodyXml: body.join(''), charts };
+  }
+
+  /* ---------- Assemblage du .docx ---------- */
+  async function generate(model, deps){
+    const JSZip = deps.JSZip;
+    const { bodyXml, charts } = build(model, deps);
+    const zip = await JSZip.loadAsync(deps.skeletonB64, { base64:true });
+    let doc = await zip.file('word/document.xml').async('string');
+    doc = doc.replace('@@BODY@@', bodyXml);
+    zip.file('word/document.xml', doc);
+    let rels = await zip.file('word/_rels/document.xml.rels').async('string');
+    let ct = await zip.file('[Content_Types].xml').async('string');
+    let relAdd = '', ctAdd = '';
+    charts.forEach((c, k) => {
+      const n = k + 1;
+      zip.file(`word/charts/chart${n}.xml`, c.xml);
+      zip.file(`word/charts/_rels/chart${n}.xml.rels`, '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+        `<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/package" Target="../embeddings/Microsoft_Excel_Worksheet${n}.xlsx"/></Relationships>`);
+      zip.file(`word/embeddings/Microsoft_Excel_Worksheet${n}.xlsx`, c.xlsx);
+      relAdd += `<Relationship Id="rIdC${n}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart" Target="charts/chart${n}.xml"/>`;
+      ctAdd += `<Override PartName="/word/charts/chart${n}.xml" ContentType="application/vnd.openxmlformats-officedocument.drawingml.chart+xml"/>`;
+    });
+    rels = rels.replace('</Relationships>', relAdd + '</Relationships>');
+    ct = ct.replace('</Types>', ctAdd + '</Types>');
+    zip.file('word/_rels/document.xml.rels', rels);
+    zip.file('[Content_Types].xml', ct);
+    return zip.generateAsync({ type: deps.outType || 'blob', compression:'DEFLATE', compressionOptions:{ level:6 }, mimeType:'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+  }
+
+  return { generate, build };
+})();
+if(typeof module !== 'undefined') module.exports = ZoneReport;
 
 </script>
 </body>
