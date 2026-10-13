@@ -4535,7 +4535,7 @@ async function generateZoneReport(){
     if(typeof JSZip === 'undefined' || typeof XLSX === 'undefined') throw new Error("Bibliothèques JSZip/XLSX non chargées (connexion internet requise la première fois).");
     const num = v => { const x = parseFloat(v); return isNaN(x) ? 0 : x; };
     const evalTeam = [], supervision = [], seenT = new Set(), seenS = new Set();
-    const plan = [];
+    const plan = [], photos = [];
     const fsModel = list.map(c => {
       const fd = loadFsData(c.id);
       const effInp = effInputs(c, fd);
@@ -4551,6 +4551,7 @@ async function generateZoneReport(){
         if(nm && !seenT.has(nm.toLowerCase())){ seenT.add(nm.toLowerCase()); evalTeam.push({ nom:nm, qualif:(e.qualif||'').trim() }); } });
       ['rapporteur','sup1','sup2','sup3'].forEach(k => { const e = fd.evaluateurs[k]; const nm = e && (e.nom||'').trim();
         if(nm && !seenS.has(nm.toLowerCase())){ seenS.add(nm.toLowerCase()); supervision.push({ nom:nm, qualif:((e.qualif||'').trim() + (k==='rapporteur' ? ' (rapporteur)' : '')).trim() }); } });
+      PHOTO_SLOTS.forEach(sl => { const ph = fd.photos && fd.photos[sl.key]; if(ph && ph.data) photos.push({ fs:c.name, title:(ph.title || sl.fixedTitle || '').trim(), data:ph.data }); });
       (fd.plan || []).forEach(r => plan.push({ fs:c.name, domain:r.domain, indicateur:r.indicateur, ameliorer:r.ameliorer, cause:r.cause, activite:r.activite, cout:r.cout }));
       return { name:c.name, type:c.type, order:c.order, domains:ds, ind, total:totalScore(c, effInp), denom:totalPlafond(c) };
     });
@@ -4560,7 +4561,7 @@ async function generateZoneReport(){
       zone, commune, departement, year:String(evalYear), dateLabel,
       domains: DOMAINS.map(d => ({ key:d.key, label:d.label })),
       indicators: INDICATORS.map(i => ({ id:i.id, label:i.label, domain:i.domain, rule:i.rule, plafond:i.plafond })),
-      fs: fsModel, evalTeam, supervision, plan, staticSpec: ZR_STATIC_SPEC
+      fs: fsModel, evalTeam, supervision, plan, photos, staticSpec: ZR_STATIC_SPEC
     };
     const blob = await ZoneReport.generate(model, { JSZip, XLSX, skeletonB64: ZR_SKELETON_B64, outType:'blob' });
     const url = URL.createObjectURL(blob);
@@ -5282,13 +5283,62 @@ const ZoneReport = (function(){
       add(P("Les plans de résolution des problèmes seront finalisés avec chaque formation sanitaire lors de l'atelier de restitution, avec l'appui de la DDS, puis suivis à l'occasion de l'évaluation semestrielle des formations sanitaires."));
     }
 
-    return { bodyXml: body.join(''), charts };
+    /* ===== 6. PHOTOS DE TERRAIN (après la conclusion) ===== */
+    const images = [];
+    add(PAGEBREAK);
+    add(H1("6. Quelques photos de terrain et d'atelier de restitution"));
+    const photos = (model.photos || []).filter(p => p.data && /^data:image\/(png|jpe?g|gif);base64,/i.test(p.data));
+    if(!photos.length){
+      add(P("Aucune photo n'a été transmise par les formations sanitaires de cette zone.", { i:true }));
+    } else {
+      let lastFs = null;
+      photos.forEach(p => {
+        if(p.fs !== lastFs){ add(H3(p.fs)); lastFs = p.fs; }
+        const m = /^data:image\/(png|jpe?g|gif);base64,([\s\S]*)$/i.exec(p.data);
+        const type = m[1].toLowerCase().replace('jpeg', 'jpg'), b64 = m[2].replace(/\s/g, '');
+        const dim = imgSize(b64ToBytes(b64), type) || { w:4, h:3 };
+        const maxW = 4500000, maxH = 4200000;
+        let cx = maxW, cy = Math.round(maxW * dim.h / dim.w);
+        if(cy > maxH){ cy = maxH; cx = Math.round(maxH * dim.w / dim.h); }
+        images.push({ type, b64 });
+        const n = images.length;
+        add('<w:p><w:pPr><w:keepNext/><w:spacing w:before="60" w:after="60" w:line="240" w:lineRule="auto"/><w:jc w:val="center"/>' + rpr({}) + '</w:pPr><w:r>' + rpr({}) +
+          `<w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0"><wp:extent cx="${cx}" cy="${cy}"/><wp:effectExtent l="0" t="0" r="0" b="0"/><wp:docPr id="${40000 + n}" name="Photo ${n}"/>` +
+          '<wp:cNvGraphicFramePr><a:graphicFrameLocks xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" noChangeAspect="1"/></wp:cNvGraphicFramePr>' +
+          '<a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture">' +
+          `<pic:nvPicPr><pic:cNvPr id="${n}" name="Photo ${n}"/><pic:cNvPicPr/></pic:nvPicPr><pic:blipFill><a:blip r:embed="rIdI${n}"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>` +
+          `<pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>`);
+        add(para(run(p.title || '', { i:true, sz:20 }), { jc:'center', line:240, after:200, sz:20 }));
+      });
+    }
+
+    return { bodyXml: body.join(''), charts, images };
+  }
+
+  function b64ToBytes(b64){
+    if(typeof atob === 'function'){ const bin = atob(b64), a = new Uint8Array(bin.length); for(let i = 0; i < bin.length; i++) a[i] = bin.charCodeAt(i); return a; }
+    return Uint8Array.from(Buffer.from(b64, 'base64'));
+  }
+  // Dimensions (px) lues dans l'en-tête PNG / JPEG / GIF
+  function imgSize(b, type){
+    try{
+      if(type === 'png') return { w:(b[16]<<24)|(b[17]<<16)|(b[18]<<8)|b[19], h:(b[20]<<24)|(b[21]<<16)|(b[22]<<8)|b[23] };
+      if(type === 'gif') return { w:b[6]|(b[7]<<8), h:b[8]|(b[9]<<8) };
+      let i = 2;
+      while(i < b.length){
+        if(b[i] !== 0xFF){ i++; continue; }
+        const mk = b[i + 1], len = (b[i + 2] << 8) | b[i + 3];
+        if(mk >= 0xC0 && mk <= 0xCF && mk !== 0xC4 && mk !== 0xC8 && mk !== 0xCC) return { h:(b[i+5]<<8)|b[i+6], w:(b[i+7]<<8)|b[i+8] };
+        i += 2 + len;
+      }
+    }catch(e){}
+    return null;
   }
 
   /* ---------- Assemblage du .docx ---------- */
   async function generate(model, deps){
     const JSZip = deps.JSZip;
-    const { bodyXml, charts } = build(model, deps);
+    const { bodyXml, charts, images } = build(model, deps);
     const zip = await JSZip.loadAsync(deps.skeletonB64, { base64:true });
     let doc = await zip.file('word/document.xml').async('string');
     doc = doc.replace('@@BODY@@', bodyXml);
@@ -5305,6 +5355,15 @@ const ZoneReport = (function(){
       relAdd += `<Relationship Id="rIdC${n}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart" Target="charts/chart${n}.xml"/>`;
       ctAdd += `<Override PartName="/word/charts/chart${n}.xml" ContentType="application/vnd.openxmlformats-officedocument.drawingml.chart+xml"/>`;
     });
+    const exts = {};
+    (images || []).forEach((im, k) => {
+      const n = k + 1;
+      zip.file(`word/media/image${n}.${im.type}`, im.b64, { base64:true });
+      relAdd += `<Relationship Id="rIdI${n}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/image${n}.${im.type}"/>`;
+      exts[im.type] = true;
+    });
+    const mimes = { png:'image/png', gif:'image/gif', jpg:'image/jpeg' };
+    Object.keys(exts).forEach(e => { if(ct.indexOf(`Extension="${e}"`) < 0) ctAdd += `<Default Extension="${e}" ContentType="${mimes[e]}"/>`; });
     rels = rels.replace('</Relationships>', relAdd + '</Relationships>');
     ct = ct.replace('</Types>', ctAdd + '</Types>');
     zip.file('word/_rels/document.xml.rels', rels);
