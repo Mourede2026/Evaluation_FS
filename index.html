@@ -2612,11 +2612,20 @@ const trackingBody = document.getElementById('trackingBody');
 // Classement de priorisation : parmi les FS d'une même zone sanitaire dont les données ont été
 // envoyées, la moins performante est la 1re à prioriser (rang 1). Les ex æquo partagent le même
 // rang. Recalculé à chaque affichage, donc mis à jour dès qu'une nouvelle FS envoie ses données.
+// Une FS est « reçue » dès que l'administrateur voit de vraies données de collecte venant de
+// l'équipe (indicateurs saisis, synthèse, plan, évaluateurs) OU que l'équipe a cliqué sur
+// « Envoyer ». Les simples paramétrages faits par l'administrateur / le gestionnaire (période,
+// valeurs figées, sources) ne comptent pas : la FS reste alors « Non reçues ».
+function fsReceived(d){
+  if(d.sent) return true;
+  if(!isFsDataUncollected(d)) return true;
+  return Object.values(d.evaluateurs||{}).some(e => e && (e.nom||'').trim());
+}
 function computePrioRanks(){
   const byZone = {};
   visibleCenters().forEach(c => {
     const d = loadFsData(c.id);
-    if(!d.sent) return;
+    if(!fsReceived(d)) return;
     const denom = totalPlafond(c);
     if(!denom) return;
     const frac = pct(totalScore(c, effInputs(c, d)), denom);
@@ -2641,8 +2650,8 @@ function renderTracking(){
     const denom = totalPlafond(c);
     const pr = prioRanks[c.id];
     const prioCell = pr
-      ? `<span class=\"badge ${performanceBadge(pr.frac).cls}\" title=\"Classement par performance croissante dans la zone sanitaire : 1er = FS la plus à prioriser (${pr.of} FS ayant envoyé leurs données)\">${pr.rank}${pr.rank===1?'er':'e'} / ${pr.of}</span>${d.locked?' 🔒':''}`
-      : `<span class=\"badge locked\" title=\"Le classement apparaît dès que la FS a envoyé ses données\">En attente d'envoi</span>${d.locked?' 🔒':''}`;
+      ? `<span class=\"badge ${performanceBadge(pr.frac).cls}\" title=\"Classement par performance croissante dans la zone sanitaire : 1er = FS la plus à prioriser (${pr.of} FS dont les données sont reçues)\">${pr.rank}${pr.rank===1?'er':'e'} / ${pr.of}</span>${d.locked?' 🔒':''}`
+      : `<span class=\"badge locked\" title=\"Le classement apparaît dès que les données de la FS sont reçues\">Non reçues</span>${d.locked?' 🔒':''}`;
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td class="center">${c.order}</td>
@@ -2653,7 +2662,7 @@ function renderTracking(){
       <td class="center">${c.date ? new Date(c.date).toLocaleDateString('fr-FR') : '<span style="color:var(--muted);">—</span>'}</td>
       <td class="center">${denom? fmtPct(pct(total,denom)) : "—"} (${total}/${denom})</td>
       <td class="center">${prioCell}</td>
-      <td class="center"><span class="badge ${d.sent?'sent':'notsent'}">${d.sent ? ('Reçues le '+ (d.sentAt? new Date(d.sentAt).toLocaleDateString('fr-FR') : '')) : 'Non reçues'}</span></td>
+      <td class="center"><span class="badge ${fsReceived(d)?'sent':'notsent'}">${fsReceived(d) ? ('Reçues' + (d.sentAt? ' le '+ new Date(d.sentAt).toLocaleDateString('fr-FR') : '')) : 'Non reçues'}</span></td>
       <td class="center" style="white-space:nowrap;">
         <button type="button" class="btn btn-outline" data-view-fs="${c.id}" style="padding:5px 8px;font-size:12px;" title="Voir toutes les données">👁</button>
         <button type="button" class="btn btn-outline" data-edit-fs="${c.id}" style="padding:5px 8px;font-size:12px;" title="Modifier cette soumission">✏️</button>
@@ -2852,7 +2861,7 @@ function renderAggregateTables(){
         const total = totalScore(c, effInputs(c, d));
         const denom = totalPlafond(c);
         if(denom > 0){ sumFrac += pct(total, denom); nCalc++; }   // FS sans indicateur applicable : non comptée
-        if(d.sent) nSent++;
+        if(fsReceived(d)) nSent++;
       });
       const avg = nCalc ? sumFrac / nCalc : 0;
       const tr = document.createElement('tr');
