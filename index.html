@@ -580,7 +580,7 @@ footer{text-align:center; font-size:11.5px; color:var(--muted); padding:20px;}
           </div>
           <div style="overflow-x:auto;">
           <table id="trackingTable">
-            <thead><tr><th>Ordre</th><th>FS</th><th>Type</th><th>Commune</th><th>Zone sanitaire</th><th>Date de saisie (évaluateurs)</th><th class="center">Performance globale</th><th class="center" title="Classement de la FS dans sa zone sanitaire (1er = la plus à prioriser), recalculé à chaque nouvel envoi">Priorisation</th><th class="center">Données envoyées</th><th class="center">Détail</th></tr></thead>
+            <thead><tr><th>Ordre</th><th>FS</th><th>Type</th><th>Commune</th><th>Zone sanitaire</th><th>Date de saisie (évaluateurs)</th><th class="center">Performance globale</th><th class="center" title="Mauvais (&lt; 50%) / Partiel (50% à &lt; 85%) / Bon (≥ 85%), selon la performance globale">Priorisation</th><th class="center">Données envoyées</th><th class="center">Détail</th></tr></thead>
             <tbody id="trackingBody"></tbody>
           </table>
           </div>
@@ -2609,9 +2609,6 @@ document.getElementById('fileImportAssignments').addEventListener('change', (e) 
 
 /* --- Suivi / synchronisation des soumissions --- */
 const trackingBody = document.getElementById('trackingBody');
-// Classement de priorisation : parmi les FS d'une même zone sanitaire dont les données ont été
-// envoyées, la moins performante est la 1re à prioriser (rang 1). Les ex æquo partagent le même
-// rang. Recalculé à chaque affichage, donc mis à jour dès qu'une nouvelle FS envoie ses données.
 // Une FS est « reçue » dès que l'administrateur voit de vraies données de collecte venant de
 // l'équipe (indicateurs saisis, synthèse, plan, évaluateurs) OU que l'équipe a cliqué sur
 // « Envoyer ». Les simples paramétrages faits par l'administrateur / le gestionnaire (période,
@@ -2621,37 +2618,22 @@ function fsReceived(d){
   if(!isFsDataUncollected(d)) return true;
   return Object.values(d.evaluateurs||{}).some(e => e && (e.nom||'').trim());
 }
-function computePrioRanks(){
-  const byZone = {};
-  visibleCenters().forEach(c => {
-    const d = loadFsData(c.id);
-    if(!fsReceived(d)) return;
-    const denom = totalPlafond(c);
-    if(!denom) return;
-    const frac = pct(totalScore(c, effInputs(c, d)), denom);
-    const z = (c.zone || '').trim() || 'Non renseigné';
-    (byZone[z] = byZone[z] || []).push({ id:c.id, frac });
-  });
-  const ranks = {};
-  Object.keys(byZone).forEach(z => {
-    const list = byZone[z];
-    list.forEach(a => { a.rank = 1 + list.filter(b => b.frac < a.frac - 1e-9).length; });
-    list.forEach(a => { ranks[a.id] = { rank:a.rank, of:list.length, frac:a.frac }; });
-  });
-  return ranks;
-}
 function renderTracking(){
   if(!hasAdminAccess()) return;
   trackingBody.innerHTML = "";
-  const prioRanks = computePrioRanks();
   visibleCenters().forEach(c => {
     const d = loadFsData(c.id);
     const total = totalScore(c, effInputs(c, d));
     const denom = totalPlafond(c);
-    const pr = prioRanks[c.id];
-    const prioCell = pr
-      ? `<span class=\"badge ${performanceBadge(pr.frac).cls}\" title=\"Classement par performance croissante dans la zone sanitaire : 1er = FS la plus à prioriser (${pr.of} FS dont les données sont reçues)\">${pr.rank}${pr.rank===1?'er':'e'} / ${pr.of}</span>${d.locked?' 🔒':''}`
-      : `<span class=\"badge locked\" title=\"Le classement apparaît dès que les données de la FS sont reçues\">Non reçues</span>${d.locked?' 🔒':''}`;
+    const received = fsReceived(d);
+    let prioCell;
+    if(received && denom){
+      const f = pct(total, denom);
+      const lvl = f < 0.5 ? {cls:'faible', label:'Mauvais'} : (f < 0.85 ? {cls:'moyenne', label:'Partiel'} : {cls:'bonne', label:'Bon'});
+      prioCell = `<span class="badge ${lvl.cls}" title="Échelle de priorisation : moins de 50% = Mauvais, de 50% à moins de 85% = Partiel, 85% et plus = Bon">${lvl.label}</span>${d.locked?' 🔒':''}`;
+    } else {
+      prioCell = `<span class="badge locked" title="L'échelle s'affiche dès que les données de la FS sont reçues">—</span>${d.locked?' 🔒':''}`;
+    }
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td class="center">${c.order}</td>
