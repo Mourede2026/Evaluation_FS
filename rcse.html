@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RCSE — Zone sanitaire · SIVEC</title>
+<link rel="stylesheet" href="assets/style.css">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0B3D3A">
+<link rel="icon" href="assets/icons/favicon.ico" sizes="any">
+<link rel="icon" type="image/png" sizes="192x192" href="assets/icons/icon-192.png">
+<link rel="icon" type="image/png" sizes="512x512" href="assets/icons/icon-512.png">
+<link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="SIVEC">
+<script src="assets/profil-menu.js"></script>
+</head>
+<body>
+<div class="app-shell">
+  <aside class="sidebar">
+    <div class="brand"><img class="brand-logo" src="assets/icons/icon-192.png" alt="SIVEC" width="48" height="48"><div class="brand-txt"><strong>SIVEC</strong><span>RCSE — Zone sanitaire</span></div></div>
+    <nav>
+      <a href="#" data-tab="dashboard" class="active">Tableau de bord</a>
+      <a href="#" data-tab="activites" id="navActivites">🔗 Activités</a>
+      <a href="#" data-tab="fichenotif">📋 Fiche de notification</a>
+      <a href="#" data-tab="sensibilisations">📣 Sensibilisations</a>
+      <a href="#" data-tab="pf">Comptes PF CCLS-TP</a>
+      <a href="#" data-tab="suivigroupe">👥 Suivi groupé RC</a>
+      <a href="#" data-tab="geo">Géographie de ma zone</a>
+      <a href="#" data-tab="assign">Assignations</a>
+      <a href="#" data-tab="utilisateurs">Mes utilisateurs</a>
+      <a href="#" data-tab="nettoyage">🗑️ Nettoyage des données</a>
+      <a href="#" data-tab="rapport">Rapport hebdomadaire</a>
+    </nav>
+    <div class="user-box"><div id="userName"></div></div>
+  </aside>
+  <main class="main">
+    <div class="topbar"><img class="topbar-logo" src="assets/icons/icon-192.png" alt="SIVEC" width="30" height="30"><h1>Zone sanitaire — <span id="zoneLabel">…</span></h1><span class="topbar-right"><span class="week-pill" id="weekPill">Semaine —</span></span></div>
+    <div class="content">
+
+      <section id="tab-sensibilisations" style="display:none">
+        <div class="card"><h2>📣 Sensibilisations communautaires des relais communautaires</h2><div id="sensibilisationsZone"></div></div>
+      </section>
+
+      <section id="tab-fichenotif" style="display:none">
+        <div class="card"><h2>📋 Fiche de notification des maladies sous surveillance</h2><div id="fichenotifZone"></div></div>
+      </section>
+
+      <section id="tab-activites" style="display:none">
+        <div class="card"><h2>🔗 Activités</h2><div id="activitesZone"></div></div>
+      </section>
+
+      <section id="tab-dashboard">
+        <div class="grid grid-4">
+          <div class="stat-card"><div class="n" id="statAlertes">–</div><div class="l">Alertes (ma zone)</div></div>
+          <div class="stat-card"><div class="n" id="statDeces">–</div><div class="l">Décès (ma zone)</div></div>
+          <div class="stat-card"><div class="n" id="statNonInv">–</div><div class="l">Non investiguées</div></div>
+          <div class="stat-card">
+            <div class="n" id="statNotif">–</div><div class="l">Notifications non lues</div>
+            <button class="btn-secondary" id="btnPurgerNotif" style="margin-top:10px;font-size:.78rem;padding:6px 10px">Tout marquer comme lu</button>
+          </div>
+        </div>
+  <div class="card" style="margin-top:18px">
+    <h2>📅 Calendrier épidémiologique</h2>
+    <p class="petit">Calendrier de l'année défini par l'administrateur national : téléchargez-le au format PDF.</p>
+    <div id="calendrierPdf"></div>
+  </div>
+  <div class="card" style="margin-top:18px">
+    <h2>✅ Alertes infection validées par l'ASCQ</h2>
+    <p class="petit">Chaque événement investigué et validé par un ASCQ (et chaque décès confirmé) apparaît ici avec son résumé : affection, localisation, cas touchés et décédés, animaux concernés, et la personne qui a fait la notification.</p>
+    <div id="alertesValidees"></div>
+  </div>
+        <div class="card" style="margin-top:18px">
+          <h2>Détail par site (villages / arrondissements / communes avec des cas)</h2>
+          <div id="dashboardDetail">Chargement…</div>
+        </div>
+              <div class="card" style="margin-top:18px">
+          <h2>📊 Tendances par semaine épidémiologique</h2>
+          <div id="tendancesZone"></div>
+        </div>
+      </section>
+
+      <section id="tab-pf" style="display:none">
+        <div class="card">
+          <h2>Créer un compte Point Focal CCLS-TP</h2>
+          <p style="font-size:.85rem;color:var(--ink-soft)">Un PF CCLS-TP est rattaché à une seule commune, choisie parmi celles de votre zone sanitaire.</p>
+          <form id="formCreatePF" class="grid grid-2">
+            <div class="field"><label>Nom</label><input name="nom" required></div>
+            <div class="field"><label>Prénom</label><input name="prenom" required></div>
+            <div class="field"><label>Téléphone (identifiant)</label><input name="telephone" required></div>
+            <div class="field"><label>Mot de passe</label><input name="motDePasse" type="password" required></div>
+            <div class="field" style="grid-column:1/-1"><label>Commune de rattachement</label><select id="pfCom" required></select></div>
+            <div style="grid-column:1/-1"><button type="submit">Créer le compte</button></div>
+          </form>
+        </div>
+        <div class="card"><h2>Points focaux CCLS-TP</h2><div id="pfTable">Chargement…</div></div>
+        <div class="card">
+          <h2>Sites couverts (communes des PF, arrondissements des ASCQ, villages des RC)</h2>
+          <div id="couvertureTable">Chargement…</div>
+        </div>
+        <div class="card">
+          <h2>Importer des PF CCLS-TP par site d'intervention (commune)</h2>
+          <div id="importPfContainer"></div>
+        </div>
+      </section>
+
+      <section id="tab-suivigroupe" style="display:none">
+        <div class="card">
+          <h2>Suivis groupés RC (toute la zone sanitaire)</h2>
+          <p style="font-size:.85rem;color:var(--ink-soft);margin:0 0 12px">Saisis par chaque ASCQ lors de ses séances de suivi groupé avec ses RC — lecture seule ici.</p>
+          <div id="suiviGroupeTable">Chargement…</div>
+        </div>
+      </section>
+
+      <section id="tab-geo" style="display:none">
+        <p style="font-size:.85rem;color:var(--ink-soft)">
+          La structure administrative nationale (départements/communes/arrondissements/villages) est
+          importée par le compte national. Vous pouvez ici ajouter des arrondissements ou villages
+          "hors liste nationale" à l'intérieur des communes de votre zone sanitaire uniquement.
+        </p>
+        <div class="card">
+          <h2>Ajouter un arrondissement (hors liste nationale)</h2>
+          <form id="formArr" class="grid grid-2">
+            <div class="field"><label>Nom</label><input name="nom" required></div>
+            <div class="field"><label>Commune</label><select id="selCommuneArr" required></select></div>
+            <div style="grid-column:1/-1"><button type="submit">Ajouter</button></div>
+          </form>
+        </div>
+        <div class="card">
+          <h2>Ajouter un village (hors liste nationale)</h2>
+          <form id="formVillage" class="grid grid-2">
+            <div class="field"><label>Nom</label><input name="nom" required></div>
+            <div class="field"><label>Commune</label><select id="vilCom" required></select></div>
+            <div class="field"><label>Arrondissement</label><select id="selArrVillage" required></select></div>
+            <div style="grid-column:1/-1"><button type="submit">Ajouter</button></div>
+          </form>
+        </div>
+        <div class="card"><h2>Structure administrative de ma zone sanitaire</h2>
+          <p style="font-size:.85rem;color:var(--ink-soft)">Limité aux 200 premières lignes ; la liste complète est dans le Google Sheet.</p>
+          <div id="geoTable">Chargement…</div>
+        </div>
+      </section>
+
+      <section id="tab-assign" style="display:none">
+        <div class="card">
+          <p style="font-size:.85rem;color:var(--ink-soft)">
+            Un ASCQ couvre automatiquement tout son arrondissement de rattachement (choisi par le
+            PF CCLS-TP à la création du compte) — aucune assignation de villages n'est nécessaire.
+            Plusieurs ASCQ peuvent être rattachés au même arrondissement : ils partagent alors le
+            même périmètre de données et le même rapport hebdomadaire. Il reste donc uniquement à
+            assigner des <strong>arrondissements</strong> (dans les communes de votre zone) aux
+            comptes <strong>PF CCLS-TP</strong> ci-dessous.
+          </p>
+        </div>
+        <div class="card">
+          <h2>Assigner des arrondissements à un PF CCLS-TP</h2>
+          <form id="formAssignPf" class="grid grid-2">
+            <div class="field"><label>PF CCLS-TP</label><select name="userId" id="selPf" required></select></div>
+            <div class="field"><label>Commune</label><select id="apCom" required></select></div>
+            <div class="field" style="grid-column:1/-1"><label>Arrondissement</label><select id="apArr" required></select></div>
+            <div style="grid-column:1/-1"><button type="submit">Assigner</button></div>
+          </form>
+        </div>
+        <div class="card"><h2>Assignations actuelles</h2><div id="assignTable">Chargement…</div></div>
+      </section>
+
+      <section id="tab-utilisateurs" style="display:none">
+        <div class="card"><h2>Comptes de ma zone (PF, ASCQ, RC)</h2><div id="usersTable">Chargement…</div></div>
+      </section>
+
+      <section id="tab-nettoyage" style="display:none">
+        <div class="card"><h2>🗑️ Nettoyage des données</h2><div id="nettoyageZone"></div></div>
+      </section>
+
+      <section id="tab-rapport" style="display:none">
+        <div class="card"><button id="genRapportBtn" class="btn-secondary">Générer / actualiser le rapport de la semaine en cours</button></div>
+        <div class="card"><h2>Support 4 — Rapport hebdomadaire de la zone sanitaire</h2><div id="rapportTable">Chargement…</div></div>
+      </section>
+
+    </div>
+  </main>
+</div>
+
+<script src="assets/geo-benin-data.js"></script>
+<script src="assets/geo-utils.js"></script>
+<script src="assets/rapport.js"></script>
+<script src="assets/bulk-import.js"></script>
+<script src="assets/user-admin.js"></script>
+<script src="assets/dashboard-detail.js"></script>
+<script src="assets/couverture.js"></script>
+<script src="assets/briefing-data.js"></script>
+<script src="assets/rapport-seance.js"></script>
+<script src="assets/liste-presence.js"></script>
+<script src="assets/suivi-groupe-lecture.js"></script>
+<script src="assets/api.js"></script>
+<script src="assets/hors-ligne.js"></script>
+<script src="assets/pdf-mini.js"></script>
+<script src="assets/calendrier-pdf.js"></script>
+<script src="assets/export-excel.js"></script>
+<script src="assets/alertes-validees.js"></script>
+<script src="assets/tendances.js"></script>
+<script src="assets/formules.js"></script>
+<script src="assets/conditions.js"></script>
+<script src="assets/taches.js"></script>
+<script src="assets/sensibilisations.js"></script>
+<script src="assets/activites.js"></script>
+<script src="assets/collecte.js"></script>
+<script src="assets/analyses.js"></script>
+<script src="assets/fiche-schemas.js"></script>
+<script src="assets/fiche-form.js"></script>
+<script src="assets/fiche-notification-pdf.js"></script>
+<script src="assets/fiche-notification.js"></script>
+<script src="assets/nettoyage.js"></script>
+<script src="assets/mon-compte.js"></script>
+<script>
+const user = Session.requireRole(['RCSE']);
+userName.textContent = user.Prenom + ' ' + user.Nom;
+
+// Communes qui composent la zone sanitaire de ce RCSE — assignées dès la création du compte par
+// le National, donc disponibles immédiatement (aucune étape d'assignation manuelle à attendre).
+let MES_COMMUNES = []; // [{ID, Nom, DepartementId, DepartementNom}]
+let GEO_CACHE = { communes: [], arrondissements: [], villages: [], grappes: [] };
+
+document.querySelectorAll('.sidebar nav a').forEach(a => a.addEventListener('click', (e) => {
+  e.preventDefault();
+  document.querySelectorAll('.sidebar nav a').forEach(x => x.classList.remove('active'));
+  a.classList.add('active');
+  ['dashboard','activites','fichenotif','sensibilisations','nettoyage','pf','suivigroupe','geo','assign','utilisateurs','rapport'].forEach(t => document.getElementById('tab-'+t).style.display = 'none');
+  document.getElementById('tab-'+a.dataset.tab).style.display = 'block';
+  const loaders = { fichenotif: () => initFicheNotification({ containerId:'fichenotifZone', user }), nettoyage: () => initNettoyage('nettoyageZone'), sensibilisations: () => initSensibilisations({ containerId:'sensibilisationsZone', user, saisie:false }), activites: () => initActivites({ containerId:'activitesZone', user, recevoir:true, gerer:true, onChange:()=>majBadgeActivites_('navActivites') }), pf: () => { loadPF(); renderCouverture('couvertureTable'); }, suivigroupe: () => renderSuivisGroupesLecture('suiviGroupeTable'), geo: loadGeo, assign: loadAssignData, utilisateurs: loadUsers, rapport: () => renderRapportModule('rapportTable') };
+  if (loaders[a.dataset.tab]) loaders[a.dataset.tab]();
+}));
+
+function fillCommuneSelect_(selectEl, placeholder) {
+  selectEl.innerHTML = MES_COMMUNES.length
+    ? `<option value="">${placeholder}</option>` + MES_COMMUNES.map(c => `<option value="${c.ID}">${c.Nom}</option>`).join('')
+    : '<option value="">Aucune commune dans votre zone — contactez le compte national</option>';
+}
+
+async function loadZone() {
+  const [{ perimetres }, { geo }] = await Promise.all([Api.call('listPerimetres', {}), Api.call('listGeo', {})]);
+  GEO_CACHE = geo;
+  const mesIds = new Set(perimetres.filter(p => p.TypeCible === 'Commune').map(p => p.CibleId));
+  MES_COMMUNES = geo.communes.filter(c => mesIds.has(c.ID));
+  zoneLabel.textContent = MES_COMMUNES.length
+    ? `${user.ZoneSanitaireNom || ''} (${MES_COMMUNES.map(c => c.Nom).join(', ')})`
+    : (user.ZoneSanitaireNom || '(aucune commune assignée — contactez le compte national)');
+}
+
+async function loadDashboard() {
+  try {
+    const { dashboard } = await Api.call('getDashboard', {});
+    statAlertes.textContent = dashboard.totalAlertes;
+    statDeces.textContent = dashboard.totalDeces;
+    statNonInv.textContent = dashboard.alertesNonInvestiguees;
+    statNotif.textContent = dashboard.notificationsNonLues;
+  } catch (e) { toast(e.message, true); }
+}
+
+btnPurgerNotif.addEventListener('click', async () => {
+  if (!confirm('Marquer toutes vos notifications comme lues ? Cette action est irréversible.')) return;
+  try {
+    await Api.call('marquerToutesNotificationsLues', {});
+    toast('Notifications purgées.');
+    loadDashboard();
+  } catch (e) { toast(e.message, true); }
+});
+
+async function loadPF() {
+  pfTable.innerHTML = 'Chargement…';
+  fillCommuneSelect_(pfCom, 'Sélectionner une commune');
+  try {
+    const { users } = await Api.call('listUsers', {});
+    const pfs = users.filter(u => u.Role === 'PF_CNLS_TP');
+    const usersById = {}; pfs.forEach(u => usersById[u.ID] = u);
+    if (!pfs.length) { pfTable.innerHTML = '<div class="empty-state">Aucun compte PF créé pour le moment.</div>'; return; }
+    let html = '<table><thead><tr><th>Nom</th><th>Téléphone</th><th>Commune</th><th>Statut</th><th></th></tr></thead><tbody>';
+    pfs.forEach(u => {
+      const actif = u.Actif === true || u.Actif === 'TRUE';
+      html += `<tr><td>${u.Prenom} ${u.Nom}</td><td>${u.Telephone}</td><td>${u.CommuneNom||''}</td>
+        <td><span class="badge ${actif ? 'badge-done' : 'badge-new'}">${actif ? 'Actif' : 'Désactivé'}</span></td>
+        <td>${userRowActionsHtml(u, user.ID, user.Role)}</td></tr>`;
+    });
+    pfTable.innerHTML = html + '</tbody></table>';
+    wireUserRowActions(pfTable, usersById, loadPF);
+  } catch (e) { pfTable.innerHTML = '<div class="empty-state">Erreur de chargement.</div>'; }
+}
+formCreatePF.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const fd = Object.fromEntries(new FormData(formCreatePF).entries());
+  const com = MES_COMMUNES.find(c => c.ID === pfCom.value);
+  if (!com) { toast('Sélectionnez une commune de votre zone.', true); return; }
+  fd.role = 'PF_CNLS_TP';
+  fd.departementId = com.DepartementId; fd.departementNom = com.DepartementNom;
+  fd.communeId = com.ID; fd.communeNom = com.Nom;
+  try { await Api.call('createUser', fd); toast('Compte PF créé.'); formCreatePF.reset(); loadPF(); }
+  catch (err) { toast(err.message, true); }
+});
+
+async function loadGeo() {
+  geoTable.innerHTML = 'Chargement…';
+  try {
+    const { geo } = await Api.call('listGeo', {});
+    GEO_CACHE = geo;
+    fillCommuneSelect_(document.getElementById('selCommuneArr'), 'Sélectionner une commune');
+    fillCommuneSelect_(document.getElementById('vilCom'), 'Sélectionner une commune');
+
+    const comIds = new Set(MES_COMMUNES.map(c => c.ID));
+    const mesArrs = geo.arrondissements.filter(a => comIds.has(a.CommuneId));
+    const arrIds = new Set(mesArrs.map(a => a.ID));
+    const mesVillages = geo.villages.filter(v => arrIds.has(v.ArrondissementId));
+    let html = `<p style="font-size:.85rem;color:var(--ink-soft)">${MES_COMMUNES.length} communes · ${mesArrs.length} arrondissements · ${mesVillages.length} villages dans votre zone.</p>`;
+    html += '<table><thead><tr><th>Commune</th><th>Arrondissement</th><th>Village</th></tr></thead><tbody>';
+    mesVillages.slice(0, 200).forEach(v => { html += `<tr><td>${v.CommuneNom||''}</td><td>${v.ArrondissementNom||''}</td><td>${v.Nom}</td></tr>`; });
+    geoTable.innerHTML = html + '</tbody></table>';
+  } catch (e) { geoTable.innerHTML = '<div class="empty-state">Erreur de chargement.</div>'; }
+}
+
+document.getElementById('vilCom').addEventListener('change', () => {
+  const arrs = GEO_CACHE.arrondissements.filter(a => a.CommuneId === document.getElementById('vilCom').value);
+  const sel = document.getElementById('selArrVillage');
+  sel.innerHTML = arrs.length ? arrs.map(a => `<option value="${a.ID}">${a.Nom}</option>`).join('') : '<option value="">Aucun arrondissement — ajoutez-le d\'abord</option>';
+});
+
+formArr.addEventListener('submit', async (e) => { e.preventDefault();
+  const fd = Object.fromEntries(new FormData(formArr).entries());
+  const comSel = document.getElementById('selCommuneArr');
+  const com = MES_COMMUNES.find(c => c.ID === comSel.value);
+  if (!com) { toast('Sélectionnez une commune de votre zone.', true); return; }
+  fd.communeId = com.ID; fd.communeNom = com.Nom;
+  try { await Api.call('createArrondissement', fd); toast('Arrondissement ajouté.'); formArr.reset(); loadGeo(); } catch (err) { toast(err.message, true); } });
+formVillage.addEventListener('submit', async (e) => { e.preventDefault();
+  const fd = Object.fromEntries(new FormData(formVillage).entries());
+  const arrSel = document.getElementById('selArrVillage');
+  if (!arrSel.value) { toast('Sélectionnez une commune puis un arrondissement.', true); return; }
+  fd.arrondissementId = arrSel.value; fd.arrondissementNom = arrSel.options[arrSel.selectedIndex].textContent;
+  try { await Api.call('createVillage', fd); toast('Village ajouté.'); formVillage.reset(); loadGeo(); } catch (err) { toast(err.message, true); } });
+
+apCom.addEventListener('change', () => {
+  const arrs = GEO_CACHE.arrondissements.filter(a => a.CommuneId === apCom.value);
+  apArr.innerHTML = arrs.length ? arrs.map(a => `<option value="${a.ID}">${a.Nom}</option>`).join('') : '<option value="">Aucun arrondissement trouvé</option>';
+});
+
+async function loadAssignData() {
+  assignTable.innerHTML = 'Chargement…';
+  fillCommuneSelect_(apCom, 'Sélectionner une commune');
+  try {
+    const [{ users }, { geo }, { perimetres }] = await Promise.all([Api.call('listUsers', {}), Api.call('listGeo', {}), Api.call('listPerimetres', {})]);
+    GEO_CACHE = geo;
+    selPf.innerHTML = users.filter(u => u.Role === 'PF_CNLS_TP').map(u => `<option value="${u.ID}">${u.Prenom} ${u.Nom}</option>`).join('');
+    let html = '<table><thead><tr><th>Type</th><th>Cible</th><th>Assigné à</th><th>Date</th></tr></thead><tbody>';
+    perimetres.filter(p => p.TypeCible === 'Arrondissement').forEach(p => {
+      const u = users.find(x => x.ID === p.UserId);
+      const cible = geo.arrondissements.find(a => a.ID === p.CibleId);
+      html += `<tr><td>${p.TypeCible}</td><td>${cible ? cible.Nom : p.CibleId}</td><td>${u ? u.Prenom+' '+u.Nom : p.UserId}</td><td>${fmtDate(p.Date)}</td></tr>`;
+    });
+    assignTable.innerHTML = html + '</tbody></table>';
+  } catch (e) { assignTable.innerHTML = '<div class="empty-state">Erreur de chargement.</div>'; }
+}
+formAssignPf.addEventListener('submit', async (e) => { e.preventDefault();
+  if (!apArr.value) { toast('Sélectionnez une commune puis un arrondissement.', true); return; }
+  const fd = { userId: selPf.value, typeCible: 'Arrondissement', cibleId: apArr.value };
+  try { await Api.call('assignPerimetre', fd); toast('Arrondissement assigné.'); loadAssignData(); } catch (err) { toast(err.message, true); } });
+
+async function loadUsers() {
+  usersTable.innerHTML = 'Chargement…';
+  try {
+    const { users } = await Api.call('listUsers', {});
+    const usersById = {}; users.forEach(u => usersById[u.ID] = u);
+    let html = '<table><thead><tr><th>Rôle</th><th>Nom</th><th>Téléphone</th><th>Créé par</th><th>Statut</th><th></th></tr></thead><tbody>';
+    users.forEach(u => {
+      const actif = u.Actif === true || u.Actif === 'TRUE';
+      const isSelf = u.ID === user.ID;
+      html += `<tr><td>${u.Role}</td><td>${u.Prenom} ${u.Nom}</td><td>${u.Telephone}</td><td>${u.CreePar}</td>
+        <td><span class="badge ${actif ? 'badge-done' : 'badge-new'}">${actif ? 'Actif' : 'Désactivé'}</span></td>
+        <td>${isSelf ? '' : userRowActionsHtml(u, user.ID, user.Role)}</td></tr>`;
+    });
+    usersTable.innerHTML = html + '</tbody></table>';
+    wireUserRowActions(usersTable, usersById, loadUsers);
+  } catch (e) { usersTable.innerHTML = '<div class="empty-state">Erreur de chargement.</div>'; }
+}
+
+genRapportBtn.addEventListener('click', async () => {
+  try { await Api.call('genererRapportHebdo', {}); toast('Rapport généré.'); renderRapportModule('rapportTable'); } catch (e) { toast(e.message, true); }
+});
+
+renderImportActeurs({
+  containerId: 'importPfContainer', role: 'PF_CNLS_TP',
+  columns: [{ key: 'communeNom', label: 'Commune (de votre zone sanitaire)' }],
+  onDone: loadPF
+});
+
+(async () => {
+  await loadZone();
+  loadDashboard();
+  renderDashboardDetail('dashboardDetail');
+  loadWeekPill();
+})();
+</script>
+<script>majBadgeActivites_('navActivites');</script>
+<script>renderTendances('tendancesZone'); renderAlertesValidees('alertesValidees');</script>
+<script src="assets/alerte-sonore.js"></script>
+<script>demarrerAlerteSonore();</script>
+<script src="assets/pwa-register.js"></script>
+<script>renderCalendrierPdf('calendrierPdf');</script>
+</body>
+</html>

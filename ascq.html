@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ASCQ — SIVEC</title>
+<link rel="stylesheet" href="assets/style.css">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0B3D3A">
+<link rel="icon" href="assets/icons/favicon.ico" sizes="any">
+<link rel="icon" type="image/png" sizes="192x192" href="assets/icons/icon-192.png">
+<link rel="icon" type="image/png" sizes="512x512" href="assets/icons/icon-512.png">
+<link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="SIVEC">
+<link rel="stylesheet" href="assets/briefing.css">
+<link rel="stylesheet" href="assets/briefing-video.css">
+<script src="assets/profil-menu.js"></script>
+</head>
+<body>
+<div class="app-shell">
+  <aside class="sidebar">
+    <div class="brand"><img class="brand-logo" src="assets/icons/icon-192.png" alt="SIVEC" width="48" height="48"><div class="brand-txt"><strong>SIVEC</strong><span>Espace ASCQ</span></div></div>
+    <nav>
+      <a href="#" data-tab="dashboard" class="active">Tableau de bord</a>
+      <a href="#" data-tab="activites" id="navActivites">🔗 Activités</a>
+      <a href="#" data-tab="fichenotif">📋 Fiche de notification</a>
+      <a href="#" data-tab="sensibilisations">📣 Sensibilisations</a>
+      <a href="#" data-tab="investiguer">À investiguer</a>
+      <a href="#" data-tab="deces" id="navDeces">⚰️ Décès à confirmer</a>
+      <a href="#" data-tab="relais">Mes relais (RC)</a>
+      <a href="#" data-tab="suivi">👥 Suivi groupé RC</a>
+      <a href="#" data-tab="nettoyage">🗑️ Nettoyage des données</a>
+      <a href="#" data-tab="rapport">Rapport hebdomadaire</a>
+      <a href="#" data-tab="notifications">🔔 Notifications</a>
+      <a href="#" data-tab="briefing">📋 Briefing maladies</a>
+    </nav>
+    <div class="user-box">
+      <div id="userName"></div>
+    </div>
+  </aside>
+  <main class="main">
+    <div class="topbar"><img class="topbar-logo" src="assets/icons/icon-192.png" alt="SIVEC" width="30" height="30"><h1>Espace Agent de Santé Communautaire Qualifié</h1><span class="topbar-right"><span class="week-pill" id="weekPill">Semaine —</span></span></div>
+    <div class="content">
+
+      <section id="tab-sensibilisations" style="display:none">
+        <div class="card"><h2>📣 Sensibilisations communautaires des relais communautaires</h2><div id="sensibilisationsZone"></div></div>
+      </section>
+
+      <section id="tab-fichenotif" style="display:none">
+        <div class="card"><h2>📋 Fiche de notification des maladies sous surveillance</h2><div id="fichenotifZone"></div></div>
+      </section>
+
+      <section id="tab-activites" style="display:none">
+        <div class="card"><h2>🔗 Activités</h2><div id="activitesZone"></div></div>
+      </section>
+
+      <section id="tab-dashboard">
+        <div class="grid grid-4">
+          <div class="stat-card"><div class="n" id="statAlertes">–</div><div class="l">Alertes reçues</div></div>
+          <div class="stat-card"><div class="n" id="statDeces">–</div><div class="l">Décès reçus · <span id="statDecesAConf">0</span> à confirmer</div></div>
+          <div class="stat-card"><div class="n" id="statNonInv">–</div><div class="l">En attente d'investigation</div></div>
+          <div class="stat-card"><div class="n" id="statNotif">–</div><div class="l">Notifications non lues</div></div>
+        </div>
+  <div class="card" style="margin-top:18px">
+    <h2>📅 Calendrier épidémiologique</h2>
+    <p class="petit">Calendrier de l'année défini par l'administrateur national : téléchargez-le au format PDF.</p>
+    <div id="calendrierPdf"></div>
+  </div>
+  <div class="card" style="margin-top:18px">
+    <h2>✅ Alertes infection validées par l'ASCQ</h2>
+    <p class="petit">Chaque événement investigué et validé par un ASCQ (et chaque décès confirmé) apparaît ici avec son résumé : affection, localisation, cas touchés et décédés, animaux concernés, et la personne qui a fait la notification.</p>
+    <div id="alertesValidees"></div>
+  </div>
+        <div class="card" style="margin-top:18px">
+          <h2>Détail par site (villages / arrondissements / communes avec des cas)</h2>
+          <div id="dashboardDetail">Chargement…</div>
+        </div>
+              <div class="card" style="margin-top:18px">
+          <h2>📊 Tendances par semaine épidémiologique</h2>
+          <div id="tendancesZone"></div>
+        </div>
+      </section>
+
+      <section id="tab-investiguer" style="display:none">
+        <div class="card">
+          <h2>Alertes en attente d'investigation</h2>
+          <p style="font-size:.8rem;color:var(--ink-soft);margin:0 0 8px">
+            Seules les alertes (événements) nécessitent une fiche d'investigation. Les décès
+            communautaires notifiés par les RC se traitent dans l'onglet « Décès à confirmer » :
+            seuls les décès confirmés sont comptés dans le rapport hebdomadaire.
+          </p>
+          <div id="pendingTable">Chargement…</div>
+        </div>
+        <div id="invResumeCard"></div>
+        <div class="card" id="invFormCard" style="display:none">
+          <h2>Fiche d'investigation (ASCQ)</h2>
+          <form id="formInvestigation"></form>
+        </div>
+      </section>
+
+      <section id="tab-deces" style="display:none">
+        <div class="card">
+          <h2>Décès communautaires notifiés par vos RC</h2>
+          <p style="font-size:.85rem;color:var(--ink-soft);margin:0">
+            Vérifiez chaque décès notifié puis <strong>confirmez-le</strong> (décès avéré) ou ne le confirmez pas
+            (motif obligatoire). <strong>Seuls les décès confirmés sont comptés dans le rapport hebdomadaire.</strong>
+            La décision est définitive.
+          </p>
+        </div>
+        <div id="decesAConfirmerZone">Chargement…</div>
+      </section>
+
+      <section id="tab-relais" style="display:none">
+        <div class="card">
+          <h2>Créer un compte Relais Communautaire</h2>
+          <p style="font-size:.8rem;color:var(--ink-soft);margin:0 0 8px">
+            Un relais communautaire est rattaché à <strong>un seul village</strong>, choisi parmi ceux de
+            votre/vos arrondissement(s). Indiquez le <strong>numéro de sa grappe</strong> (de 1 à 20) ;
+            le nom de la grappe est facultatif. Une même grappe peut être couverte par plusieurs RC.
+            Vous pourrez, si besoin, lui assigner une autre grappe plus tard (voir « Assigner une
+            grappe supplémentaire » ci-dessous).
+          </p>
+          <form id="formCreateRC" class="grid grid-2">
+            <div class="field"><label>Nom</label><input name="nom" required></div>
+            <div class="field"><label>Prénom</label><input name="prenom" required></div>
+            <div class="field"><label>Téléphone (identifiant)</label><input name="telephone" required></div>
+            <div class="field"><label>Mot de passe</label><input name="motDePasse" type="password" required></div>
+            <div class="field"><label>Village du RC (un seul)</label><select id="rcVillageSelect" required></select></div>
+            <div class="field"><label>Numéro de la grappe (1 à 20)</label><input type="number" id="rcGrappeNumero" name="grappeNumero" min="1" max="20" step="1" inputmode="numeric" required></div>
+            <div class="field" style="grid-column:1/-1"><label>Nom de la grappe (facultatif)</label><input id="rcGrappeNomPerso" name="grappeNomPerso" maxlength="60" placeholder="Ex. : quartier du marché">
+              <div id="rcGrappeHint" style="font-size:.78rem;color:var(--ink-soft);margin-top:4px;min-height:1em"></div></div>
+            <div style="grid-column:1/-1"><button type="submit">Créer le compte</button></div>
+          </form>
+        </div>
+        <div class="card"><h2>Mes relais communautaires</h2><div id="rcTable">Chargement…</div></div>
+        <div class="card">
+          <h2>Assigner une grappe supplémentaire à un RC existant <span style="font-weight:400;font-size:.8rem">(optionnel)</span></h2>
+          <p style="font-size:.85rem;color:var(--ink-soft)">Le RC garde son village et sa grappe principale. Vous pouvez lui confier en plus une autre grappe : dans son même village, dans un autre village de son arrondissement, ou dans un autre arrondissement de votre commune.</p>
+          <form id="formAssignGrappe" class="grid grid-2">
+            <div class="field"><label>Relais communautaire</label><select id="selRcForGrappe" required></select></div>
+            <div class="field"><label>Arrondissement</label><select id="agArrSelect" required></select></div>
+            <div class="field"><label>Village</label><select id="agVillageSelect" required></select></div>
+            <div class="field"><label>Numéro de la grappe (1 à 20)</label><input type="number" id="agGrappeNumero" min="1" max="20" step="1" inputmode="numeric" required></div>
+            <div class="field" style="grid-column:1/-1"><label>Nom de la grappe (facultatif)</label><input id="agGrappeNomPerso" maxlength="60">
+              <div id="agGrappeHint" style="font-size:.78rem;color:var(--ink-soft);margin-top:4px;min-height:1em"></div></div>
+            <div style="grid-column:1/-1"><button type="submit">Assigner</button></div>
+          </form>
+        </div>
+        <div class="card">
+          <h2>Importer des RC par site d'intervention (village)</h2>
+          <div id="importRcContainer"></div>
+        </div>
+      </section>
+
+      <section id="tab-suivi" style="display:none">
+        <div class="sub-tabs">
+          <button type="button" data-suivi-sub="planning" class="active">📅 Planning</button>
+          <button type="button" data-suivi-sub="compte">📝 Enregistrer un suivi réalisé</button>
+          <button type="button" data-suivi-sub="historique">👥 Historique</button>
+        </div>
+
+        <div id="suiviSub-planning">
+          <div class="card">
+            <h2>Planifier un suivi groupé</h2>
+            <p style="font-size:.85rem;color:var(--ink-soft);margin:0 0 12px">
+              Programmez la séance : date, village(s) et RC convoqués. Cocher un village convoque tous ses RC
+              (décochez ceux qui ne sont pas concernés). Les RC convoqués reçoivent une notification, et votre
+              hiérarchie (Point Focal, RCSE, Département, National) est informée et voit le planning.
+            </p>
+            <form id="formPlanning">
+              <div class="grid grid-2">
+                <div class="field"><label>Date prévue</label><input type="date" name="datePrevue" id="planDate" required></div>
+                <div class="field"><label>Heure (optionnel)</label><input type="time" name="heure"></div>
+                <div class="field"><label>Lieu de la séance (optionnel)</label><input name="lieu" placeholder="Ex : centre de santé, école, place du village…"></div>
+                <div class="field"><label>Objectif (optionnel)</label><input name="objectif" placeholder="Ex : rappel des définitions de cas"></div>
+              </div>
+              <fieldset>
+                <legend>RC à convoquer — filtrer par village</legend>
+                <div id="planRcPicker"></div>
+              </fieldset>
+              <fieldset>
+                <legend>Thèmes prévus (optionnel)</legend>
+                <div class="checks" id="planThemes"></div>
+              </fieldset>
+              <button type="submit" class="btn-block">Planifier le suivi groupé</button>
+            </form>
+          </div>
+          <div class="card"><h2>Mon planning</h2><div id="planningTable">Chargement…</div></div>
+        </div>
+
+        <div id="suiviSub-compte" style="display:none">
+          <div class="card">
+            <h2>Enregistrer un suivi groupé réalisé</h2>
+            <p style="font-size:.85rem;color:var(--ink-soft);margin:0 0 12px">
+              Choisissez un village pour afficher ses relais communautaires, cochez ceux qui étaient
+              présents (vous pouvez changer de village : vos coches sont conservées), sélectionnez les
+              thèmes abordés (définitions de cas officielles) et joignez le rapport : photo(s) et/ou document(s).
+              <strong>Une fois enregistré, le rapport est verrouillé : vous pourrez le consulter à tout moment (onglet Historique) mais plus le modifier.</strong>
+            </p>
+            <div id="suiviBandeauPlanning" class="bandeau-planning" style="display:none"></div>
+            <form id="formSuivi">
+              <div class="grid grid-2">
+                <div class="field"><label>Date de la séance (tenue)</label><input type="date" name="date" id="suiviDate" required></div>
+                <div class="field"><label>Lieu de la séance</label><input name="lieu" id="suiviLieu" placeholder="Ex : centre de santé de Djegbe"></div>
+              </div>
+              <fieldset>
+                <legend>Liste de présence — filtrer par village</legend>
+                <div id="suiviRcPicker"></div>
+              </fieldset>
+              <fieldset id="suiviAutresBloc" style="display:none">
+                <legend>Autres participants (superviseurs présents à la séance)</legend>
+                <div class="checks" id="suiviAutres"></div>
+                <div class="petit">Cochez les superviseurs (PF, RCSE, Département…) qui ont participé : ils figureront aussi dans la liste de présence, avec leur signature.</div>
+              </fieldset>
+              <fieldset id="suiviActeursBloc">
+                <legend>Autres acteurs présents (sans compte SIVEC)</legend>
+                <div class="petit" style="margin-bottom:8px">Ex. médecin chef de commune, chef d'arrondissement, partenaire… Renseignez les informations de la liste de présence ; ils y figureront avec une case de signature à remplir à la main après impression. Cliquez sur « + » pour en ajouter autant que nécessaire.</div>
+                <div id="suiviActeurs"></div>
+                <button type="button" class="btn-secondary btn-mini" id="suiviActeurAjout">+ Ajouter un autre acteur</button>
+              </fieldset>
+              <fieldset>
+                <legend>Thèmes abordés (définitions de cas)</legend>
+                <div class="checks" id="suiviThemes"></div>
+              </fieldset>
+              <fieldset>
+                <legend>Rapport du suivi (au moins une photo ou un document)</legend>
+                <div class="grid grid-2">
+                  <div class="field"><label>📷 Photo(s) de la séance</label>
+                    <div class="photo-actions">
+                      <label class="btn-secondary btn-photo">📷 Prendre une photo<input type="file" id="suiviPhotosCamera" accept="image/*" capture="environment" hidden></label>
+                      <label class="btn-secondary btn-photo">🖼️ Choisir dans la galerie<input type="file" id="suiviPhotos" accept="image/*" multiple hidden></label>
+                    </div>
+                    <div class="petit">« Prendre une photo » ouvre directement l'appareil photo du téléphone ; vous pouvez en prendre plusieurs, une par une.</div></div>
+                  <div class="field"><label>📄 Document(s) du rapport (PDF, Word, Excel — 5 Mo max)</label><input type="file" id="suiviDocs" accept=".pdf,.doc,.docx,.xls,.xlsx,.odt,.txt" multiple></div>
+                </div>
+                <div id="suiviFichiersApercu" class="fichiers-apercu"></div>
+              </fieldset>
+              <div class="field"><label>Commentaires (optionnel)</label><textarea name="commentaires" placeholder="Difficultés rencontrées, points à retenir…"></textarea></div>
+              <button type="submit" class="btn-block">Enregistrer le suivi groupé</button>
+            </form>
+          </div>
+        </div>
+
+        <div id="suiviSub-historique" style="display:none">
+          <div class="card"><h2>Historique des suivis groupés</h2><div id="suiviTable">Chargement…</div></div>
+        </div>
+      </section>
+
+      <section id="tab-nettoyage" style="display:none">
+        <div class="card"><h2>🗑️ Nettoyage des données</h2><div id="nettoyageZone"></div></div>
+      </section>
+
+      <section id="tab-rapport" style="display:none">
+        <div class="card">
+          <p style="font-size:.85rem;color:var(--ink-soft);margin:0 0 12px">Ce rapport porte sur un arrondissement. S'il existe plusieurs ASCQ dans le même arrondissement, ils partagent exactement le même rapport ; si vous couvrez plusieurs arrondissements, vous recevez un rapport distinct pour chacun (naviguez avec les boutons Précédent / Suivant).</p>
+          <button id="genRapportBtn" class="btn-secondary">Générer / actualiser le rapport de la semaine en cours</button>
+        </div>
+        <div class="card"><h2>Support 4 — Rapport hebdomadaire (auto-généré)</h2><div id="rapportTable">Chargement…</div></div>
+      </section>
+
+      <section id="tab-notifications" style="display:none">
+        <div class="card"><h2>Mes notifications</h2><div id="notificationsTable">Chargement…</div></div>
+      </section>
+
+      <section id="tab-briefing" style="display:none">
+        <div id="briefingContainer">Chargement…</div>
+      </section>
+
+    </div>
+  </main>
+</div>
+
+<script src="assets/geo-benin-data.js"></script>
+<script src="assets/geo-utils.js"></script>
+<script src="assets/rapport.js"></script>
+<script src="assets/briefing-data.js"></script>
+<script src="assets/briefing-videos-data.js"></script>
+<script src="assets/briefing-videos.js"></script>
+<script src="assets/briefing-scenes.js"></script>
+<script src="assets/briefing-video.js"></script>
+<script src="assets/briefing.js"></script>
+<script src="assets/bulk-import.js"></script>
+<script src="assets/user-admin.js"></script>
+<script src="assets/dashboard-detail.js"></script>
+<script src="assets/notifications-liste.js"></script>
+<script src="assets/notification-rc.js"></script>
+<script src="assets/deces-confirmation.js"></script>
+<script src="assets/rapport-seance.js"></script>
+<script src="assets/liste-presence.js"></script>
+<script src="assets/suivi-groupe-lecture.js"></script>
+<script src="assets/suivi-groupe-ascq.js"></script>
+<script src="assets/alerte-sonore.js"></script>
+<script src="assets/api.js"></script>
+<script src="assets/hors-ligne.js"></script>
+<script src="assets/pdf-mini.js"></script>
+<script src="assets/calendrier-pdf.js"></script>
+<script src="assets/export-excel.js"></script>
+<script src="assets/alertes-validees.js"></script>
+<script src="assets/tendances.js"></script>
+<script src="assets/formules.js"></script>
+<script src="assets/conditions.js"></script>
+<script src="assets/taches.js"></script>
+<script src="assets/sensibilisations.js"></script>
+<script src="assets/activites.js"></script>
+<script src="assets/collecte.js"></script>
+<script src="assets/analyses.js"></script>
+<script src="assets/fiche-schemas.js"></script>
+<script src="assets/fiche-form.js"></script>
+<script src="assets/fiche-notification-pdf.js"></script>
+<script src="assets/fiche-notification.js"></script>
+<script src="assets/nettoyage.js"></script>
+<script src="assets/mon-compte.js"></script>
+<script>
+const user = Session.requireRole(['ASCQ']);
+userName.textContent = user.Prenom + ' ' + user.Nom;
+
+let briefingLoaded = false;
+
+document.querySelectorAll('.sidebar nav a').forEach(a => a.addEventListener('click', (e) => {
+  e.preventDefault();
+  document.querySelectorAll('.sidebar nav a').forEach(x => x.classList.remove('active'));
+  a.classList.add('active');
+  ['dashboard','activites','fichenotif','sensibilisations','nettoyage','investiguer','deces','relais','suivi','rapport','notifications','briefing'].forEach(t => document.getElementById('tab-'+t).style.display = 'none');
+  document.getElementById('tab-'+a.dataset.tab).style.display = 'block';
+  if (a.dataset.tab === 'fichenotif') initFicheNotification({ containerId:'fichenotifZone', user });
+  if (a.dataset.tab === 'nettoyage') initNettoyage('nettoyageZone');
+  if (a.dataset.tab === 'sensibilisations') initSensibilisations({ containerId:'sensibilisationsZone', user, saisie:false });
+  if (a.dataset.tab === 'activites') initActivites({ containerId:'activitesZone', user, recevoir:true, gerer:true, onChange:()=>majBadgeActivites_('navActivites') });
+  if (a.dataset.tab === 'investiguer') loadPending();
+  if (a.dataset.tab === 'deces') loadDecesAConfirmer();
+  if (a.dataset.tab === 'relais') loadRC();
+  if (a.dataset.tab === 'suivi') initSuiviGroupeAscq();
+  if (a.dataset.tab === 'notifications') renderNotifications('notificationsTable');
+  if (a.dataset.tab === 'rapport') renderRapportModule('rapportTable');
+  if (a.dataset.tab === 'briefing') { if (!briefingLoaded) { renderBriefingModule('briefingContainer'); briefingLoaded = true; } maybeAutoOpenBriefingVideo(); }
+}));
+
+async function loadDashboard() {
+  try {
+    const { dashboard } = await Api.call('getDashboard', {});
+    statAlertes.textContent = dashboard.totalAlertes;
+    statDeces.textContent = dashboard.totalDeces;
+    statNonInv.textContent = dashboard.alertesNonInvestiguees;
+    statNotif.textContent = dashboard.notificationsNonLues;
+    statDecesAConf.textContent = dashboard.decesAConfirmer || 0;
+    navDeces.textContent = '⚰️ Décès à confirmer' + (dashboard.decesAConfirmer ? ' (' + dashboard.decesAConfirmer + ')' : '');
+  } catch (e) { toast(e.message, true); }
+}
+
+let __pendingAlertesParId = {};
+
+async function loadPending() {
+  pendingTable.innerHTML = 'Chargement…';
+  try {
+    // Seules les ALERTES (événements) nécessitent une fiche d'investigation ASCQ — les décès
+    // notifiés par un RC sont à CONFIRMER dans l'onglet « Décès à confirmer » (pas d'investigation).
+    const { alertes } = await Api.call('listAlertes', {});
+    const rows = alertes.filter(x => x.Statut !== 'Investigué').map(x => ({ ...x, refType: 'ALERTE' }));
+    __pendingAlertesParId = {}; rows.forEach(r => { __pendingAlertesParId[r.ID] = r; });
+    if (!rows.length) { pendingTable.innerHTML = '<div class="empty-state">Aucune alerte en attente d\'investigation. 👍</div>'; return; }
+    let html = '<table><thead><tr><th>Type</th><th>Date</th><th>Nom / description</th><th></th></tr></thead><tbody>';
+    rows.forEach(r => {
+      html += `<tr><td>Alerte</td><td>${fmtDate(r.DateSaisie)}</td>
+        <td>${r.Nom || r.TypeAlerte}</td>
+        <td style="white-space:nowrap"><button data-inv="${r.refType}|${r.ID}">Investiguer</button> <button class="btn-secondary btn-mini nrc-suppr" data-supp="${r.ID}" title="Supprimer cette notification">🗑️</button></td></tr>`;
+    });
+    pendingTable.innerHTML = html + '</tbody></table>';
+    pendingTable.querySelectorAll('[data-inv]').forEach(b => b.addEventListener('click', () => openInvestigation(b.dataset.inv)));
+    pendingTable.querySelectorAll('[data-supp]').forEach(b => b.addEventListener('click', () => NotifRc.supprimer('ALERTE', __pendingAlertesParId[b.dataset.supp], () => { loadPending(); loadDashboard(); })));
+  } catch (e) { pendingTable.innerHTML = '<div class="empty-state">Erreur de chargement.</div>'; }
+}
+
+// Résumé, en lecture seule, du cas tel que notifié par le RC — affiché AVANT le formulaire
+// d'investigation lui-même, pour que l'ASCQ voie d'abord ce qui a été signalé (nom, événement,
+// nombre de personnes/animaux touchés) sans pouvoir le modifier depuis cet écran.
+function resumeAlerteHtml_(r) {
+  if (!r) return '';
+  const champ = (label, val) => `<div><span style="display:block;font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.02em;color:var(--ink-soft)">${label}</span><span style="font-size:.92rem">${val || val === 0 ? val : '—'}</span></div>`;
+  return `
+    <div class="card" style="background:#FAFCFB;border-left:4px solid var(--teal-700)">
+      <h2 style="margin-top:0">Cas notifié par le RC <span style="font-weight:400;font-size:.78rem;color:var(--ink-soft)">(lecture seule)</span></h2>
+      <div class="grid grid-4">
+        ${champ('Nom du cas', r.Nom)}
+        ${champ('Événement', r.AutrePreciser || r.TypeAlerte)}
+        ${champ('Personnes touchées', r.PersonnesTouchees)}
+        ${champ('Personnes décédées', r.PersonnesMortes)}
+        ${champ('Animaux malades', r.AnimauxMalades)}
+        ${champ('Animaux morts', r.AnimauxMorts)}
+        ${champ('Village', r.VillageNom)}
+        ${champ('Date de notification', fmtDate(r.DateNotification))}
+      </div>
+    </div>`;
+}
+
+function openInvestigation(key) {
+  const [refType, refId] = key.split('|');
+  // Toutes les données collectées par le RC, corrigeables avant de valider ; la notification peut aussi être supprimée.
+  const zoneCarte = document.getElementById('invResumeCard'), ligneRc = __pendingAlertesParId[refId];
+  NotifRc.rendreCarte(zoneCarte, 'ALERTE', ligneRc, {
+    onChange: (l) => { __pendingAlertesParId[refId] = l; prerempli_(l); loadPending(); },
+    onSupprime: () => { invFormCard.style.display = 'none'; zoneCarte.innerHTML = ''; loadPending(); loadDashboard(); }
+  });
+  invFormCard.style.display = 'block';
+  invFormCard.scrollIntoView({ behavior: 'smooth' });
+  const CAT = ['0-11 mois masculin','0-11 mois féminin','1 à 5 ans masculin','1 à 5 ans féminin',
+    '6 à 15 ans masculin','6 à 15 ans féminin','>15 ans masculin','>15 ans féminin'];
+  formInvestigation.innerHTML = `
+    <input type="hidden" name="refType" value="${refType}"><input type="hidden" name="refId" value="${refId}">
+    <div class="grid grid-2">
+      <div class="field"><label>Nom et prénom du relais</label><input name="relais"></div>
+      <div class="field"><label>Téléphone du relais</label><input name="telRelais"></div>
+    </div>
+    <div class="field"><label>Événement avéré ?</label><select name="evenementAvere"><option value="Oui">Oui</option><option value="Non">Non</option></select></div>
+    <div class="field"><label>Source d'information sur l'événement</label><input name="source"></div>
+    <div class="field"><label>Maladie / événement concerné</label><input name="maladie" required></div>
+    <div class="field"><label>Décrire l'événement (signes, symptômes, date de début, personnes touchées)</label><textarea name="description"></textarea></div>
+    <div class="field"><label>Circonstances de survenue</label><textarea name="circonstances"></textarea></div>
+    <div class="grid grid-2">
+      <div class="field"><label>Date de survenue</label><input name="dateSurvenue" type="date"></div>
+      <div class="field"><label>Date d'investigation</label><input name="dateInvestigation" type="date" value="${todayISO_()}"></div>
+    </div>
+    <fieldset><legend>Nombre total de cas par catégorie</legend>
+      <div class="grid grid-4">${CAT.map(c => `<div class="field"><label>${c}</label><input type="number" min="0" value="0" data-cas="${c}"></div>`).join('')}</div>
+    </fieldset>
+    <fieldset><legend>Nombre total de décès par catégorie</legend>
+      <div class="grid grid-4">${CAT.map(c => `<div class="field"><label>${c}</label><input type="number" min="0" value="0" data-deces="${c}"></div>`).join('')}</div>
+    </fieldset>
+    <div class="field"><label>Synthèse des actions menées</label><textarea name="actions"></textarea></div>
+    <button type="submit">Envoyer la fiche d'investigation</button>
+  `;
+  // Préremplissage à partir de la notification du RC (modifiable) : événement, début de la maladie, nom du relais.
+  const prerempli_ = (l) => {
+    if (!l) return;
+    const m = formInvestigation.elements['maladie'], ds = formInvestigation.elements['dateSurvenue'], rl = formInvestigation.elements['relais'];
+    if (m && !m.value) m.value = l.AutrePreciser || String(l.TypeAlerte || '').replace(/^\d+\.\s*/, '');
+    if (ds && !ds.value) ds.value = String(l.DateDebutMaladie || '').slice(0, 10);
+    if (rl && !rl.value) rl.value = l.NotificateurNom || '';
+  };
+  prerempli_(ligneRc);
+  formInvestigation.onsubmit = async (e) => {
+    e.preventDefault();
+    const fd = new FormData(formInvestigation);
+    const casParCategorie = {}, decesParCategorie = {};
+    formInvestigation.querySelectorAll('[data-cas]').forEach(i => casParCategorie[i.dataset.cas] = Number(i.value) || 0);
+    formInvestigation.querySelectorAll('[data-deces]').forEach(i => decesParCategorie[i.dataset.deces] = Number(i.value) || 0);
+    const payload = Object.fromEntries(fd.entries());
+    payload.casParCategorie = casParCategorie;
+    payload.decesParCategorie = decesParCategorie;
+    const avere = String(payload.evenementAvere || 'Oui') !== 'Non';
+    const fermer = () => { invFormCard.style.display = 'none'; document.getElementById('invResumeCard').innerHTML = ''; loadPending(); loadDashboard(); };
+    if (!avere) {
+      // Événement non avéré : pas de fiche de notification à remplir.
+      try { await Api.call('submitInvestigation', payload); toast('Fiche d\'investigation envoyée.'); fermer(); } catch (err) { toast(err.message, true); }
+      return;
+    }
+    // Événement avéré : la FICHE DE NOTIFICATION du cas doit être remplie et envoyée avec la validation ; sans elle, l'alerte n'est pas prise en compte.
+    FicheNotif.demarrerValidation({
+      type: 'maladie',
+      titre: 'Validation de l\u2019alerte de ' + (ligneRc && (ligneRc.Nom || ligneRc.TypeAlerte) || 'cas notifié') + ' — fiche de notification à remplir',
+      prefill: () => FicheNotif.prefillAlerte(__pendingAlertesParId[refId] || ligneRc),
+      finaliser: (fiche) => Api.call('submitInvestigation', Object.assign({}, payload, { fiche: fiche })),
+      messageSucces: 'Alerte validée : la fiche de notification est envoyée à la plateforme.',
+      apres: fermer
+    });
+  };
+}
+function todayISO_() { return new Date().toISOString().slice(0,10); }
+
+function fillVillageSelect_(selectEl, villages, mesArrIds) {
+  if (!villages.length) {
+    selectEl.innerHTML = '<option value="">Aucun village trouvé dans votre/vos arrondissement(s) — importez la géographie ou contactez votre PF CCLS-TP</option>';
+  } else {
+    selectEl.innerHTML = villages.map(v => `<option value="${v.ID}">${v.Nom}${mesArrIds.length > 1 && v.ArrondissementNom ? ' (' + v.ArrondissementNom + ')' : ''}</option>`).join('');
+  }
+}
+const grappesGeo_ = () => (window.GEO_LOOKUP ? window.GEO_LOOKUP.grappes : []);
+
+// Formulaire « grappe supplémentaire » : arrondissement (de la commune de l'ASCQ) puis village.
+function fillAgArrondissements_(selectedArrId) {
+  const G = window.GEO_LOOKUP; if (!G) return;
+  const mes = G.mesArrIds;
+  agArrSelect.innerHTML = G.arrondissementsCommune.map(a => `<option value="${a.ID}">${a.Nom}${mes.includes(a.ID) ? ' (le vôtre)' : ''}</option>`).join('');
+  if (selectedArrId && G.arrondissementsCommune.some(a => a.ID === selectedArrId)) agArrSelect.value = selectedArrId;
+  fillAgVillages_();
+}
+function fillAgVillages_(selectedVilId) {
+  const G = window.GEO_LOOKUP; if (!G) return;
+  const vils = G.villages.filter(v => v.ArrondissementId === agArrSelect.value);
+  agVillageSelect.innerHTML = vils.length ? vils.map(v => `<option value="${v.ID}">${v.Nom}</option>`).join('') : '<option value="">Aucun village dans cet arrondissement</option>';
+  if (selectedVilId && vils.some(v => v.ID === selectedVilId)) agVillageSelect.value = selectedVilId;
+  majAgHint_();
+}
+
+async function loadRC() {
+  rcTable.innerHTML = 'Chargement…';
+  try {
+    const [{ users }, { geo }, { perimetres }] = await Promise.all([
+      Api.call('listUsers', {}), Api.call('listGeo', {}), Api.call('listArrondissementsAscq', {})
+    ]);
+    // Villages des arrondissements couverts par cet ASCQ : le village d'un RC est choisi parmi eux.
+    const mesArrIds = perimetres.map(p => p.CibleId);
+    const myVillages = geo.villages.filter(v => mesArrIds.includes(v.ArrondissementId));
+    fillVillageSelect_(rcVillageSelect, myVillages, mesArrIds);
+    // Arrondissements de la commune de l'ASCQ (pour une grappe supplémentaire dans un autre arrondissement).
+    const mesArrs = geo.arrondissements.filter(a => mesArrIds.includes(a.ID));
+    const communeId = user.CommuneId || (mesArrs[0] ? mesArrs[0].CommuneId : '');
+    let arrCommune = communeId ? geo.arrondissements.filter(a => a.CommuneId === communeId) : mesArrs;
+    mesArrs.forEach(a => { if (!arrCommune.some(x => x.ID === a.ID)) arrCommune.push(a); });
+    window.GEO_LOOKUP = { villages: geo.villages, arrondissements: geo.arrondissements, communes: geo.communes, grappes: geo.grappes || [], mesArrIds, arrondissementsCommune: arrCommune };
+
+    const rcs = users.filter(u => u.Role === 'RC');
+    const usersById = {}; rcs.forEach(u => usersById[u.ID] = u);
+    window.RC_PAR_ID = usersById;
+    selRcForGrappe.innerHTML = rcs.map(u => `<option value="${u.ID}">${u.Prenom} ${u.Nom}</option>`).join('');
+    const rc0 = rcs[0];
+    fillAgArrondissements_(rc0 ? rc0.ArrondissementId : '');
+    if (rc0) fillAgVillages_(rc0.VillageId);
+    majRcHint_();
+    if (!rcs.length) { rcTable.innerHTML = '<div class="empty-state">Aucun relais créé pour le moment.</div>'; return; }
+
+    // Grappes couvertes par chaque RC (la principale + d'éventuelles grappes supplémentaires).
+    const { perimetres: perimGrappes } = await Api.call('listGrappesRc', {});
+    const grappeParId = {}; (geo.grappes || []).forEach(g => grappeParId[g.ID] = g);
+
+    let html = '<table><thead><tr><th>Nom</th><th>Téléphone</th><th>Village</th><th>Grappe principale</th><th>Autres grappes</th><th>Statut</th><th></th></tr></thead><tbody>';
+    rcs.forEach(u => {
+      const actif = u.Actif === true || u.Actif === 'TRUE';
+      const mes = perimGrappes.filter(p => p.UserId === u.ID).map(p => ({ id: p.CibleId, g: grappeParId[p.CibleId] }));
+      const principale = mes.find(m => m.id === u.GrappeId);
+      const autres = mes.filter(m => m.id !== u.GrappeId).map(m => {
+        const nom = m.g ? m.g.Nom : m.id;
+        return m.g && m.g.VillageId !== u.VillageId ? `${nom} (${m.g.VillageNom})` : nom;
+      });
+      html += `<tr><td>${u.Prenom} ${u.Nom}</td><td>${u.Telephone}</td><td>${u.VillageNom||''}</td>
+        <td>${principale && principale.g ? principale.g.Nom : (u.GrappeNom || '<span class="empty-hint">à renseigner</span>')}</td><td>${autres.join(', ')}</td>
+        <td><span class="badge ${actif ? 'badge-done' : 'badge-new'}">${actif ? 'Actif' : 'Désactivé'}</span></td>
+        <td>${userRowActionsHtml(u, user.ID, user.Role)}</td></tr>`;
+    });
+    rcTable.innerHTML = html + '</tbody></table>';
+    wireUserRowActions(rcTable, usersById, loadRC);
+  } catch (e) { rcTable.innerHTML = '<div class="empty-state">Erreur de chargement.</div>'; }
+}
+
+const majRcHint_ = brancherIndiceGrappe_(rcVillageSelect, rcGrappeNumero, rcGrappeNomPerso, rcGrappeHint, grappesGeo_);
+const majAgHint_ = brancherIndiceGrappe_(agVillageSelect, agGrappeNumero, agGrappeNomPerso, agGrappeHint, grappesGeo_);
+agArrSelect.addEventListener('change', () => fillAgVillages_());
+selRcForGrappe.addEventListener('change', () => {
+  const u = window.RC_PAR_ID && window.RC_PAR_ID[selRcForGrappe.value];
+  if (u) { fillAgArrondissements_(u.ArrondissementId); fillAgVillages_(u.VillageId); }
+});
+
+formCreateRC.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const fd = Object.fromEntries(new FormData(formCreateRC).entries());
+  const villageId = rcVillageSelect.value;
+  if (!villageId) { toast('Sélectionnez le village du RC.', true); return; }
+  const numero = parseInt(fd.grappeNumero, 10);
+  if (isNaN(numero) || numero < GRAPPE_NUM_MIN || numero > GRAPPE_NUM_MAX) { toast('Le numéro de grappe doit être compris entre 1 et 20.', true); return; }
+  fd.role = 'RC';
+  fd.villageId = villageId;
+  fd.grappeNumero = String(numero);
+  try {
+    await Api.call('createUser', fd);
+    toast('Compte relais créé.');
+    formCreateRC.reset();
+    loadRC();
+  } catch (err) { toast(err.message, true); }
+});
+
+formAssignGrappe.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const villageId = agVillageSelect.value;
+  if (!selRcForGrappe.value || !villageId) { toast('Sélectionnez un RC et un village.', true); return; }
+  const numero = parseInt(agGrappeNumero.value, 10);
+  if (isNaN(numero) || numero < GRAPPE_NUM_MIN || numero > GRAPPE_NUM_MAX) { toast('Le numéro de grappe doit être compris entre 1 et 20.', true); return; }
+  try {
+    await Api.call('assignGrappeRc', { userId: selRcForGrappe.value, villageId, grappeNumero: String(numero), grappeNomPerso: agGrappeNomPerso.value.trim() });
+    toast('Grappe assignée.');
+    agGrappeNumero.value = ''; agGrappeNomPerso.value = ''; agGrappeHint.textContent = '';
+    loadRC();
+  } catch (err) { toast(err.message, true); }
+});
+
+genRapportBtn.addEventListener('click', async () => {
+  try { await Api.call('genererRapportHebdo', {}); toast('Rapport généré.'); renderRapportModule('rapportTable'); }
+  catch (e) { toast(e.message, true); }
+});
+
+renderImportActeurs({
+  containerId: 'importRcContainer', role: 'RC',
+  columns: [{ key: 'villageNom', label: 'Village' }, { key: 'arrondissementNom', label: 'Arrondissement (si ambiguïté)' }, { key: 'grappeNumero', label: 'N° de grappe (1 à 20)' }, { key: 'grappeNom', label: 'Nom de la grappe (facultatif)' }],
+  onDone: loadRC
+});
+
+loadDashboard();
+renderDashboardDetail('dashboardDetail');
+loadWeekPill();
+demarrerAlerteSonore();
+</script>
+<script>majBadgeActivites_('navActivites');</script>
+<script>renderTendances('tendancesZone'); renderAlertesValidees('alertesValidees');</script>
+<script src="assets/pwa-register.js"></script>
+<script>renderCalendrierPdf('calendrierPdf');</script>
+</body>
+</html>
